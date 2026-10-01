@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+staticfiles/
+compiler/engine/sandbox/ptyrun
+compiler/engine/sandbox/octcp
+compiler/engine/sandbox/jdi/classes/
+e2e/screenshots/

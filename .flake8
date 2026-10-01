@@ -1,0 +1,5 @@
+[flake8]
+max-line-length = 120
+exclude = .venv,*/migrations/*,staticfiles
+per-file-ignores =
+    compiler/engine/languages.py:E501

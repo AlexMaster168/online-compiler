@@ -1,0 +1,326 @@
+{% load static %}<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if snippet %}{{ snippet.title|default:"Сниппет" }} · {% endif %}Online Compiler</title>
+  <meta name="description" content="Онлайн-компилятор: 20+ языков, подсветка синтаксиса, изолированный запуск.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c5cff'/><path d='M12 10l-6 6 6 6M20 10l6 6-6 6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <link rel="stylesheet" href="{% static 'compiler/app.css' %}">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <button class="icon-btn" id="historyToggle" title="История запусков" aria-label="История запусков">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg>
+      </button>
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+      </span>
+      <span class="brand-name">Online&nbsp;Compiler</span>
+    </div>
+
+    <div class="lang-picker" id="langPicker">
+      <button class="lang-button" id="langButton" aria-haspopup="listbox" aria-expanded="false">
+        <span class="lang-dot" id="langDot"></span>
+        <span id="langLabel">Загрузка…</span>
+        <span class="lang-version" id="langVersion"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="lang-menu" id="langMenu" role="listbox" hidden>
+        <input class="lang-search" id="langSearch" placeholder="Найти язык…" autocomplete="off" spellcheck="false">
+        <ul id="langList"></ul>
+      </div>
+    </div>
+
+    <div class="project-info" id="projectInfo" hidden>
+      <button class="project-title" id="projectTitle" title="Переименовать проект"></button>
+      <span class="project-dirty" id="projectDirty" title="Есть несохранённые изменения" hidden>●</span>
+      <span class="project-meta" id="projectMeta"></span>
+      <button class="btn ghost small" id="forkBtn" title="Сделать свою копию проекта" hidden>
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2.2"/><circle cx="18" cy="5" r="2.2"/><circle cx="12" cy="19" r="2.2"/><path d="M6 7.2v1.3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7.2M12 11.5v5.3"/></svg>
+        <span>Форк</span>
+      </button>
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" id="resetBtn" title="Вернуть шаблон языка">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Новый</span>
+      </button>
+      <button class="btn ghost" id="shareBtn" title="Поделиться (Ctrl+S)">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span id="shareLabel">Поделиться</span>
+      </button>
+      <button class="icon-btn" id="downloadBtn" title="Скачать проект (.zip)" aria-label="Скачать проект">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Настройки редактора" aria-label="Настройки редактора">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+      <button class="icon-btn" id="themeBtn" title="Сменить тему" aria-label="Сменить тему">
+        <svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <div class="account" id="account">
+        <button class="btn ghost" id="loginBtn" title="Войти или зарегистрироваться">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Войти</span>
+        </button>
+        <button class="user-btn" id="userBtn" aria-haspopup="menu" aria-expanded="false" hidden>
+          <span class="avatar" id="userAvatar"></span><span class="user-name" id="userName"></span>
+        </button>
+        <div class="user-menu" id="userMenu" role="menu" hidden>
+          <button role="menuitem" id="myProjectsBtn">Мои проекты</button>
+          <button role="menuitem" id="logoutBtn">Выйти</button>
+        </div>
+      </div>
+      <button class="btn ghost debug-btn" id="debugBtn" title="Отладка (F5)" hidden>
+        <svg viewBox="0 0 24 24"><path d="M9 6.5a3 3 0 0 1 6 0"/><rect x="7" y="7" width="10" height="13" rx="5"/><path d="M12 11v9M3 13h4M17 13h4M4 7.5l3 2M20 7.5l-3 2M4 19l3-2M20 19l-3-2"/></svg>
+        <span>Отладка</span>
+      </button>
+      <button class="btn primary" id="runBtn" title="Запустить (Ctrl+Enter)">
+        <svg class="play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>
+        <span class="stop-icon" aria-hidden="true"></span>
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="run-label" id="runLabel">Запустить</span>
+        <kbd>Ctrl ↵</kbd>
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="history" id="history" hidden>
+      <div class="panel-head">
+        <span>История</span>
+        <button class="icon-btn small" id="historyClose" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <ul class="history-list" id="historyList"><li class="muted pad">Пока пусто — запусти что-нибудь</li></ul>
+    </aside>
+
+    <main class="split" id="split">
+      <section class="pane editor-pane">
+        <div class="pane-head">
+          <div class="tabs" id="tabs" role="tablist" aria-label="Файлы проекта"></div>
+          <button class="icon-btn small" id="newFileBtn" title="Новый файл" aria-label="Новый файл">
+            <svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15h6"/></svg>
+          </button>
+          <button class="icon-btn small" id="uploadBtn" title="Загрузить файлы с диска (или перетащи их в редактор)" aria-label="Загрузить файлы">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          </button>
+          <input type="file" id="fileInput" multiple hidden>
+          <div class="debug-toolbar" id="debugToolbar" role="toolbar" aria-label="Управление отладкой" hidden>
+            <span class="dbg-state" id="dbgState">Запуск…</span>
+            <button class="dbg-btn" id="dbgContinue" title="Продолжить (F5)" aria-label="Продолжить">
+              <svg viewBox="0 0 24 24"><path d="M6 4v16"/><path d="M10 4.5l10 7.5-10 7.5z"/></svg>
+            </button>
+            <button class="dbg-btn" id="dbgPause" title="Пауза (F6)" aria-label="Пауза">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
+            </button>
+            <button class="dbg-btn" id="dbgStepOver" title="Шаг с обходом (F10)" aria-label="Шаг с обходом">
+              <svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 15-3.5"/><path d="M20 4v6h-6"/><circle cx="12" cy="19" r="1.8"/></svg>
+            </button>
+            <button class="dbg-btn" id="dbgStepInto" title="Шаг с заходом (F11)" aria-label="Шаг с заходом">
+              <svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 9.5l5 5 5-5"/><circle cx="12" cy="20" r="1.8"/></svg>
+            </button>
+            <button class="dbg-btn" id="dbgStepOut" title="Шаг с выходом (Shift+F11)" aria-label="Шаг с выходом">
+              <svg viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M7 8.5l5-5 5 5"/><circle cx="12" cy="20" r="1.8"/></svg>
+            </button>
+            <button class="dbg-btn stop" id="dbgStop" title="Остановить (Shift+F5)" aria-label="Остановить">
+              <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </button>
+          </div>
+          <div class="pane-tools">
+            <button class="chip" id="formatBtn" title="Отформатировать файл (Shift+Alt+F)">Формат</button>
+            <button class="chip" id="fontDown" title="Уменьшить шрифт">A−</button>
+            <button class="chip" id="fontUp" title="Увеличить шрифт">A+</button>
+            <button class="chip" id="wrapBtn" title="Перенос строк">Wrap</button>
+          </div>
+        </div>
+        <div class="editor" id="editor"><div class="editor-loading">Загружаю редактор…</div></div>
+        <div class="drop-hint" id="dropHint" hidden>Отпусти, чтобы добавить файлы в проект</div>
+        <div class="statusline">
+          <span id="cursorPos">Ln 1, Col 1</span>
+          <span id="codeSize">0 B</span>
+          <span class="vim-status" id="vimStatus" hidden></span>
+          <span class="grow"></span>
+          <span id="keymapInfo" hidden></span>
+          <span id="backendInfo"></span>
+        </div>
+      </section>
+
+      <div class="gutter" id="gutter" role="separator" aria-orientation="vertical" tabindex="0"></div>
+
+      <section class="pane side-pane" id="sidePane">
+        <div class="args-bar">
+          <label class="args-label" for="argsInput" title="Аргументы командной строки: argv, sys.argv, os.Args, args[]…">Аргументы</label>
+          <input class="args-input" id="argsInput" placeholder='например: -n 5 "два слова"' spellcheck="false" autocomplete="off">
+        </div>
+        <div class="io-block stdin-block" id="stdinBlock">
+          <div class="pane-head">
+            <span class="pane-title">Ввод <span class="muted">stdin</span></span>
+            <button class="chip" id="stdinClear">Очистить</button>
+          </div>
+          <textarea id="stdin" spellcheck="false" placeholder="Данные для input() / Scanner / cin…"></textarea>
+        </div>
+
+        <div class="io-block debug-panel" id="debugPanel" hidden>
+          <div class="pane-head">
+            <span class="pane-title">Отладчик</span>
+            <span class="dbg-reason" id="dbgReason"></span>
+            <div class="pane-tools">
+              <button class="chip" id="dbgHide" title="Скрыть панель">Скрыть</button>
+            </div>
+          </div>
+          <div class="debug-body">
+            <section class="dbg-section">
+              <div class="dbg-title">Стек вызовов</div>
+              <ul class="dbg-frames" id="dbgFrames"><li class="muted">—</li></ul>
+            </section>
+            <section class="dbg-section grow">
+              <div class="dbg-title">Переменные</div>
+              <ul class="dbg-tree" id="dbgVars"><li class="muted">Поставь брейкпоинт кликом слева от номера строки</li></ul>
+            </section>
+            <section class="dbg-section">
+              <div class="dbg-title">Watch</div>
+              <form class="watch-form" id="watchForm" autocomplete="off">
+                <input id="watchInput" placeholder="выражение и Enter, например x * 2" spellcheck="false">
+              </form>
+              <ul class="dbg-watches" id="dbgWatches"></ul>
+            </section>
+          </div>
+        </div>
+
+        <div class="io-block output-block">
+          <div class="pane-head">
+            <div class="segmented" role="tablist" aria-label="Режим ввода">
+              <button class="seg" id="modeConsole" role="tab" title="Интерактивная консоль: программа ждёт ввод, ты печатаешь">Консоль</button>
+              <button class="seg" id="modeBatch" role="tab" title="Ввод задаётся заранее, stdout и stderr раздельно">Stdin<span class="seg-long"> заранее</span></button>
+            </div>
+            <span class="status-badge" id="statusBadge" hidden></span>
+            <div class="pane-tools">
+              <button class="chip" id="copyOut" title="Скопировать вывод">Копировать</button>
+              <button class="chip" id="clearOut">Очистить</button>
+            </div>
+          </div>
+          <div class="terminal-wrap" id="terminalWrap" hidden><div class="terminal" id="terminal"></div></div>
+          <div class="output" id="output" tabindex="0" aria-live="polite">
+            <div class="placeholder">
+              <p>Нажми <kbd>Ctrl</kbd> + <kbd>Enter</kbd>, чтобы запустить код</p>
+              <p class="muted" id="limitsInfo"></p>
+            </div>
+          </div>
+          <div class="metrics" id="metrics" hidden>
+            <span><b id="mTime">—</b> время</span>
+            <span><b id="mMem">—</b> память</span>
+            <span><b id="mExit">—</b> код выхода</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<dialog class="settings" id="settingsDialog" aria-labelledby="settingsTitle">
+  <form method="dialog" class="settings-form" id="settingsForm">
+    <div class="panel-head">
+      <span id="settingsTitle">Настройки редактора</span>
+      <button class="icon-btn small" value="close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <label class="field"><span>Раскладка клавиш</span>
+        <select name="keymap">
+          <option value="default">Обычная (VS Code)</option>
+          <option value="vim">Vim</option>
+          <option value="emacs">Emacs</option>
+        </select>
+      </label>
+      <label class="field"><span>Отступ</span>
+        <select name="indent">
+          <option value="spaces">Пробелы</option>
+          <option value="tabs">Табуляция</option>
+        </select>
+      </label>
+      <label class="field"><span>Ширина отступа</span>
+        <select name="tabSize">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="8">8</option>
+        </select>
+      </label>
+      <label class="field"><span>Размер шрифта</span>
+        <input name="fontSize" type="number" min="10" max="28" step="1">
+      </label>
+      <label class="field"><span>Стиль C / C++ / Java / C#</span>
+        <select name="clangStyle">
+          <option>LLVM</option><option>Google</option><option>Chromium</option><option>Mozilla</option>
+          <option>WebKit</option><option>Microsoft</option><option>GNU</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="wrap"> Перенос длинных строк</label>
+      <label class="check"><input type="checkbox" name="minimap"> Миникарта</label>
+      <p class="muted small">Отступ применяется ко всем открытым файлам и к форматированию.
+        <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> — отформатировать файл.</p>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="settings auth" id="authDialog" aria-labelledby="authTitle">
+  <form class="settings-form" id="authForm" autocomplete="on">
+    <div class="panel-head">
+      <div class="segmented" role="tablist" id="authTitle">
+        <button type="button" class="seg on" data-auth="login" role="tab">Вход</button>
+        <button type="button" class="seg" data-auth="register" role="tab">Регистрация</button>
+      </div>
+      <button type="button" class="icon-btn small" id="authClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <label class="field stack"><span>Логин</span>
+        <input name="username" autocomplete="username" required minlength="3" maxlength="30" spellcheck="false">
+      </label>
+      <label class="field stack"><span>Пароль</span>
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="form-error" id="authError" role="alert" hidden></p>
+      <button class="btn primary wide" id="authSubmit" type="submit">Войти</button>
+      <p class="muted small" id="authHint">Проекты сохраняются в аккаунт, история запусков — тоже.</p>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="settings projects" id="projectsDialog" aria-labelledby="projectsTitle">
+  <div class="panel-head">
+    <span id="projectsTitle">Мои проекты</span>
+    <button type="button" class="icon-btn small" id="projectsClose" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="projects-body">
+    <input class="projects-search" id="projectsSearch" placeholder="Найти по названию или языку…" autocomplete="off" spellcheck="false">
+    <ul class="projects-list" id="projectsList"></ul>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+{{ snippet|json_script:"snippet-data" }}
+{{ limits|json_script:"limits-data" }}
+{{ user|json_script:"user-data" }}
+<script>window.MONACO_BASE = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min";</script>
+<!-- xterm — до AMD-загрузчика Monaco, иначе UMD-сборка зарегистрируется как AMD-модуль, а не глобально -->
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+<script src="{% static 'compiler/app.js' %}"></script>
+</body>
+</html>

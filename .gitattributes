@@ -1,0 +1,8 @@
+# Батники — только CRLF, иначе cmd.exe путается в метках и переносах
+*.bat text eol=crlf
+# Всё, что собирается и запускается в Linux-контейнерах, — только LF: CRLF ломает `\` в Dockerfile
+*.Dockerfile text eol=lf
+Dockerfile text eol=lf
+*.c text eol=lf
+*.java text eol=lf
+*.sh text eol=lf
