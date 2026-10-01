@@ -760,6 +760,7 @@
     const term = ensureTerminal();
     if (!term) return;
     term.reset();
+    window.OCEsp32Hardware?.reset();
     cons.line = "";
     cons.transcript = { compile: "", out: "" };
     setMarkers(null);
@@ -807,6 +808,7 @@
         term.write(ANSI.yellow(ev.data));
       } else {
         cons.transcript.out += ev.data;
+        if (state.lang.slug === "esp32") window.OCEsp32Hardware?.feed(ev.data);
         term.write(ev.stream === "stderr" ? ANSI.red(ev.data) : ev.data);
       }
     } else if (ev.type === "exit") {
@@ -845,6 +847,7 @@
     const term = ensureTerminal();
     if (!term) return;
     term.reset();
+    window.OCEsp32Hardware?.reset();
     if (result.compile_output) term.write(ANSI.yellow(result.compile_output));
     if (result.stdout) term.write(result.stdout);
     if (result.stderr && result.stderr !== result.stdout) term.write(ANSI.red(result.stderr));
@@ -1373,6 +1376,7 @@
     if (!lang) return;
     if (state.lang && state.files.length) { clearTimeout(draftTimer); saveDraft(); }
     state.lang = lang;
+    window.OCEsp32Hardware?.select(lang.slug);
     store.set("lang", lang.slug);
 
     $("langLabel").textContent = lang.name;

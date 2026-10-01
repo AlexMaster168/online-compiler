@@ -51,6 +51,9 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_eth_start(ethernet));
     for (int counter = 0; ; counter++) {
         printf("ESP32: %d\n", counter);
+        // Serial telemetry drives the browser components (not QEMU GPIO).
+        printf("@OC LED %d\n@OC SERVO %d\n@OC LCD ESP32: %d\n",
+               counter % 2, (counter % 3) * 90, counter);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

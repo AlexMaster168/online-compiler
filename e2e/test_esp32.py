@@ -18,6 +18,9 @@ with sync_playwright() as p:
     page.wait_for_function("document.querySelector('#terminal').textContent.includes('ESP32 HTTP ready') || "
                            "!document.querySelector('#runBtn').classList.contains('stop')", timeout=700000)
     assert 'ESP32 HTTP ready' in page.locator('#terminal').inner_text(), page.locator('#terminal').inner_text()[-4000:]
+    page.wait_for_function("/^[0-9]/.test(document.querySelector('#espAngle').textContent)", timeout=15000)
+    assert page.locator('#esp32Hardware').is_visible()
+    page.screenshot(path=str(Path(__file__).resolve().parents[1] / 'docs/screenshots/esp32-components.png'))
     url = page.locator('#esp32Preview').get_attribute('href')
     site = browser.new_page(viewport={'width': 1000, 'height': 700})
     site.goto(base + url)
