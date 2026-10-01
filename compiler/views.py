@@ -4,12 +4,13 @@ import zipfile
 
 from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
-from . import engine
-from .accounts import SNIPPETS, user_dict
+from . import engine, library
+from .accounts import SNIPPETS, user_dict, visible_snippet_or_404
+from .oauth import enabled_providers
 from .engine.formatter import FormatError, server_formatter
 from .engine.formatter import format_code as run_formatter
 from .models import Execution, Snippet
@@ -31,21 +32,29 @@ def _client_ip(request) -> str | None:
 
 
 @ensure_csrf_cookie
-def index(request, snippet_id: str | None = None):
+def index(request, snippet_id: str | None = None, uidb64: str | None = None, token: str | None = None):
     _session_key(request)  # сессия нужна до открытия WebSocket-консоли: по ней пишется история
     snippet = None
     if snippet_id:
-        snippet = get_object_or_404(SNIPPETS, pk=snippet_id)
+        snippet = visible_snippet_or_404(request, snippet_id)
+        if snippet.language in ("scratch", "arduino"):
+            return redirect(f"/{snippet.language}/{snippet.pk}/")
         Snippet.objects.filter(pk=snippet.pk).update(views=snippet.views + 1)
     return render(request, "compiler/index.html", {
         "snippet": snippet.to_dict(request.user) if snippet else None,
         "limits": _limits(),
         "user": user_dict(request.user),
+        # Фронтенд сам открывает нужный диалог: «новый пароль» по ссылке из письма, ошибка входа через OAuth
+        "auth": {
+            "providers": enabled_providers(),
+            "reset": {"uid": uidb64, "token": token} if uidb64 else None,
+            "error": request.GET.get("auth_error", "")[:300],
+        },
     })
 
 
 def snippet_raw(request, snippet_id: str):
-    snippet = get_object_or_404(Snippet, pk=snippet_id)
+    snippet = visible_snippet_or_404(request, snippet_id)
     return HttpResponse(snippet.code, content_type="text/plain; charset=utf-8")
 
 
@@ -54,7 +63,7 @@ def _zip_response(slug: str, code: str, files: list[dict], title: str = "") -> H
     lang = engine.get_language(slug)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(lang.filename, code)
+        zf.writestr(lang.filename if lang else "sketch.ino", code)
         for item in files:
             zf.writestr(item["name"], item["content"])
     base = re.sub(r"[^\w.-]+", "-", title, flags=re.ASCII).strip("-.")[:60] or f"{slug}-project"
@@ -64,7 +73,12 @@ def _zip_response(slug: str, code: str, files: list[dict], title: str = "") -> H
 
 
 def snippet_zip(request, snippet_id: str):
-    snippet = get_object_or_404(Snippet, pk=snippet_id)
+    snippet = visible_snippet_or_404(request, snippet_id)
+    if snippet.language == "scratch":
+        import base64
+        response = HttpResponse(base64.b64decode(snippet.code), content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="project.sb3"'
+        return response
     return _zip_response(snippet.language, snippet.code, snippet.files, snippet.title or snippet.id)
 
 
@@ -92,6 +106,39 @@ def format_code(request):
         return JsonResponse({"code": run_formatter(slug, code, settings.EXECUTOR)})
     except FormatError as exc:
         return JsonResponse({"error": str(exc)}, status=422)
+
+
+@require_GET
+def library_index(request):
+    """Библиотека алгоритмов для языка: категории и задачи, для которых есть код."""
+    slug = request.GET.get("language", "")
+    if slug == "esp32":
+        return JsonResponse({"categories": ["Микроконтроллеры"], "items": [
+            {"id": "web_server", "title": "Сайт ESP32 в эмуляторе", "category": "Микроконтроллеры",
+             "description": "HTTP-сервер и Serial. Сеть QEMU: виртуальный Ethernet OpenETH."},
+            {"id": "wifi_hardware", "title": "Wi-Fi и сайт на настоящей ESP32", "category": "Микроконтроллеры",
+             "description": "Подключение к роутеру и HTTP-сервер. Нужна физическая плата: QEMU не эмулирует Wi-Fi."},
+        ]})
+    if engine.get_language(slug) is None:
+        return JsonResponse({"error": "Неизвестный язык"}, status=400)
+    return JsonResponse({"categories": list(library.CATEGORIES), "items": library.catalog(slug)})
+
+
+@require_GET
+def library_item(request, slug: str, algorithm_id: str):
+    if slug == "esp32" and algorithm_id in ("web_server", "wifi_hardware"):
+        from pathlib import Path
+        code = engine.get_language("esp32").template if algorithm_id == "web_server" else (
+            Path(__file__).parent / "engine/sandbox/esp32/main/wifi_hardware.c.example"
+        ).read_text(encoding="utf-8")
+        return JsonResponse({"id": algorithm_id, "title": "ESP32 " + algorithm_id,
+                             "category": "Микроконтроллеры", "description": "", "language": slug, "code": code})
+    code = library.get_code(slug, algorithm_id)
+    if code is None:
+        raise Http404
+    algorithm = library.BY_ID[algorithm_id]
+    return JsonResponse({"id": algorithm.id, "title": algorithm.title, "category": algorithm.category,
+                         "description": algorithm.description, "language": slug, "code": code})
 
 
 def _limits() -> dict:

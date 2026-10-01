@@ -113,3 +113,31 @@ EXECUTOR = {
     "DEBUG_TIMEOUT": float(os.getenv("EXECUTOR_DEBUG_TIMEOUT", "900")),
     "DEBUG_CPU_SECONDS": float(os.getenv("EXECUTOR_DEBUG_CPU_SECONDS", "60")),
 }
+
+# --- Почта (сброс пароля) ---
+# Без EMAIL_HOST письма печатаются в консоль сервера — для разработки этого хватает
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_BACKEND = (
+    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+    else "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Online Compiler <noreply@localhost>")
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 3  # ссылка из письма живёт 3 часа
+
+# --- Вход через GitHub / Google (OAuth2) ---
+# Кнопки появляются, только если заданы client id и secret. Callback-адреса для настройки приложения:
+#   GitHub: <сайт>/auth/github/callback/      Google: <сайт>/auth/google/callback/
+OAUTH_PROVIDERS = {
+    "github": {
+        "client_id": os.getenv("GITHUB_CLIENT_ID", ""),
+        "client_secret": os.getenv("GITHUB_CLIENT_SECRET", ""),
+    },
+    "google": {
+        "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+    },
+}

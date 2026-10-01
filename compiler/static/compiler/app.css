@@ -59,7 +59,11 @@ body {
   overflow: hidden;
 }
 button { font: inherit; color: inherit; }
-svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+/* Стиль иконок. Чужую графику (Blockly и т.п.) не трогаем — иначе её SVG сжимается до 18px и теряет заливку */
+svg:not(.injectionDiv svg) {
+  width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round; flex: none;
+}
 kbd {
   font: 500 11px var(--mono);
   padding: 1px 5px;
@@ -631,3 +635,83 @@ kbd {
   .output-block .chip { padding: 0 6px; }
   .output-block .status-badge { padding: 0 6px; }
 }
+
+/* ---------- библиотека примеров ---------- */
+.library-list { overflow-y: auto; min-height: 120px; }
+.library-group { margin-bottom: 8px; }
+.library-group h4 {
+  margin: 8px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.library-item {
+  display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; text-align: left;
+  background: transparent; color: var(--text); cursor: pointer; font: inherit;
+}
+.library-item:hover, .library-item:focus-visible { background: var(--panel-2); outline: none; }
+.library-item .l-title { font-weight: 600; }
+.library-item .l-desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+/* ---------- страница профиля ---------- */
+body.page { overflow: auto; }
+body.page .topbar a { text-decoration: none; color: inherit; }
+.profile { max-width: 860px; margin: 0 auto; padding: 32px 16px 48px; }
+.profile-head { display: flex; align-items: center; gap: 18px; margin-bottom: 28px; }
+.profile-head h1 { margin: 0 0 4px; font-size: 26px; }
+.profile-head p { margin: 0; }
+.avatar.big { width: 64px; height: 64px; border-radius: 16px; font-size: 28px; }
+.profile-projects { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.profile-card {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--border); color: var(--text); text-decoration: none;
+}
+.profile-card:hover { border-color: var(--accent); }
+.profile-card .p-title { font-weight: 600; }
+.profile-card .p-title.untitled { color: var(--muted); }
+.profile-card .p-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+.profile .empty { padding: 32px 0; text-align: center; line-height: 1.6; }
+
+/* ---------- видимость проекта, аккаунт ---------- */
+.visibility-select {
+  height: 28px; padding: 0 6px; border-radius: 6px; outline: none; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text-2); font: 12px var(--sans);
+}
+.visibility-select:hover, .visibility-select:focus { border-color: var(--border-strong); color: var(--text); }
+.badge {
+  display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  background: var(--bg-2); color: var(--text-2);
+}
+.badge.public { background: var(--ok-soft); color: var(--ok); }
+.badge.private { background: var(--warn-soft); color: var(--warn); }
+.oauth-buttons { display: grid; gap: 8px; }
+.oauth-buttons .btn { justify-content: center; width: 100%; border: 1px solid var(--border-strong); }
+.oauth-buttons .btn svg { width: 18px; height: 18px; }
+.auth-sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.auth-sep::before, .auth-sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.form-ok { margin: 0; padding: 8px 10px; border-radius: 6px; font-size: 13px; color: var(--ok); background: var(--ok-soft); }
+.account-form { display: grid; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.account-form:last-of-type { border-bottom: 0; }
+
+/* ---------- блоки (Blockly) ---------- */
+.blocks-area { flex: 3 1 0; min-height: 0; position: relative; }
+.editor-pane.blocks-mode .editor { flex: 2 1 0; border-top: 1px solid var(--border); }
+.editor-pane.blocks-mode.hide-code .editor { display: none; }
+.editor-pane.blocks-mode .tabs, .editor-pane.blocks-mode #newFileBtn, .editor-pane.blocks-mode #uploadBtn,
+.editor-pane.blocks-mode #formatBtn, .editor-pane.blocks-mode #libraryBtn { display: none; }
+.blocks-area .blocklyToolboxDiv { font-family: var(--sans); }
+.blocks-area .blocklyTreeLabel { font-weight: 600; }
+/* injectionDiv у Blockly — height: 100%; у flex-элемента с flex-basis 0 это «неопределённая» высота,
+   и SVG рабочей области получался 18x18. Растягиваем абсолютно на весь контейнер */
+.blocks-area .injectionDiv { position: absolute; inset: 0; }
+
+/* ---------- страница Scratch ---------- */
+body.scratch-page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+body.scratch-page .topbar a { text-decoration: none; color: inherit; }
+.scratch-main { flex: 1; min-height: 0; position: relative; background: #e6f0ff; }
+.scratch-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.scratch-loading, .scratch-missing {
+  position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 8px;
+  color: var(--text); background: var(--bg);
+}
+.scratch-missing pre { padding: 10px 14px; border-radius: 8px; background: var(--panel); font: 14px var(--mono); }

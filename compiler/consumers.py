@@ -85,6 +85,9 @@ class RunConsumer(AsyncJsonWebsocketConsumer):
         else:
             self.session = Session(req.language, req.code, req.files_dict, emit=self._emit_threadsafe, args=req.argv)
         self.session.start()
+        if req.language == "esp32":
+            from .esp32_preview import register
+            await self.send_json({"type": "esp32_preview", "url": register(self.session)})
 
     async def _debug_request(self, content: dict) -> None:
         """Команда отладчику. DAP-запросы блокирующие — выполняем в потоке, ответ шлём с тем же id."""

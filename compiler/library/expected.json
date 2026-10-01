@@ -1,0 +1,17 @@
+{
+  "bubble_sort": "Sorted: 1 2 5 5 6 9",
+  "quick_sort": "Sorted: 1 3 5 7 8 9 10",
+  "merge_sort": "Sorted: 3 9 10 27 38 43 82",
+  "binary_search": "Found 7 at index 3\n4 not found",
+  "sieve": "Primes up to 50: 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47",
+  "gcd_lcm": "GCD(48, 18) = 6\nLCM(48, 18) = 144",
+  "fibonacci": "Fibonacci: 0 1 1 2 3 5 8 13 21 34 55 89 144 233 377\nF(50) = 12586269025",
+  "factorial": "10! = 3628800\n20! = 2432902008176640000",
+  "power_mod": "2^30 mod 1000000007 = 73741817\n3^200 mod 1000000007 = 136318165",
+  "bfs": "BFS order: 0 1 2 3 4 5\nDistances: 0 1 1 2 2 3",
+  "dfs": "DFS order: 0 1 3 5 4 2",
+  "dijkstra": "Dijkstra from 0: 0 3 1 4 7",
+  "lcs": "LCS(ABCBDAB, BDCABA) = 4",
+  "knapsack": "Knapsack max value: 9",
+  "hanoi": "Move disk 1 from A to C\nMove disk 2 from A to B\nMove disk 1 from C to B\nMove disk 3 from A to C\nMove disk 1 from B to A\nMove disk 2 from B to C\nMove disk 1 from A to C\nTotal moves: 7"
+}

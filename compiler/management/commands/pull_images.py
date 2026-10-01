@@ -21,6 +21,11 @@ class Command(BaseCommand):
 
         images = sorted({lang.docker.image for lang in LANGUAGES
                          if lang.docker and (not wanted or lang.slug in wanted)})
+        own = [image for image in images if docker.is_own_image(image)]
+        images = [image for image in images if not docker.is_own_image(image)]
+        if own:
+            self.stdout.write(f"Свои образы ({', '.join(own)}) не качаются, а собираются: "
+                              "python manage.py build_sandbox")
         failed = []
         for image in images:
             self.stdout.write(f"→ {image} ... ", ending="")

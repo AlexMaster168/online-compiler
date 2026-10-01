@@ -67,6 +67,7 @@ def language_catalog() -> list[dict]:
             "debug_backend": debug_backend(lang, cfg),
             "debuggable": debug_backend(lang, cfg) is not None,
             "formatter": "server" if isinstance(lang.formatter, FormatSpec) else lang.formatter,
+            "editor": lang.editor,
         })
     return catalog
 
@@ -77,7 +78,7 @@ def _unavailable_message(lang: Language, cfg: dict) -> str:
         if not docker.daemon_available(cfg):
             hints.append("запусти Docker")
         else:
-            hints.append(f"скачай образ: python manage.py pull_images {lang.slug}")
+            hints.append(f"подготовь образ: python manage.py {docker.image_hint(lang)}")
     if lang.local and cfg["BACKEND"] in ("auto", "local"):
         hints.append("или установи локальный тулчейн")
     return f"{lang.name} сейчас недоступен — " + " ".join(hints) if hints else f"{lang.name} недоступен"

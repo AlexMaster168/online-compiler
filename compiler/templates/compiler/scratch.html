@@ -1,0 +1,70 @@
+{% load static %}<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if project %}{{ project.title|default:"Без названия" }} · {% endif %}Scratch 3 · Online Compiler</title>
+  <meta name="description" content="Scratch 3 прямо в браузере: спрайты, сцена, блоки. Проекты сохраняются в аккаунт.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23FFAB19'/><path d='M12 10l-6 6 6 6M20 10l6 6-6 6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'compiler/app.css' %}">
+  <script>
+    try {
+      const t = JSON.parse(localStorage.getItem("oc:theme"));
+      document.documentElement.dataset.theme = t || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    } catch (e) {}
+  </script>
+</head>
+<body class="scratch-page">
+  <header class="topbar">
+    <a class="brand" href="/" title="Вернуться к компилятору">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></span>
+      <span class="brand-name">Scratch&nbsp;3</span>
+    </a>
+
+    <div class="project-info" id="projectInfo">
+      <button class="project-title" id="projectTitle"></button>
+      <span class="project-dirty" id="projectDirty" title="Есть несохранённые изменения" hidden>●</span>
+      <select class="visibility-select" id="visibilitySelect" title="Кто видит проект" hidden>
+        <option value="unlisted">По ссылке</option>
+        <option value="public">Публичный</option>
+        <option value="private">Приватный</option>
+      </select>
+      <span class="project-meta" id="projectMeta"></span>
+    </div>
+
+    <div class="actions">
+      <a class="btn ghost" href="/scratch/" title="Новый проект Scratch">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Новый</span>
+      </a>
+      <a class="btn ghost" id="accountLink" href="/"></a>
+      <button class="btn primary" id="saveBtn" title="Сохранить (Ctrl+S)" disabled>
+        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+        <span id="saveLabel">Сохранить</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="scratch-main">
+    {% if editor_url %}
+      <iframe class="scratch-frame" id="scratchFrame" src="{{ editor_url }}" title="Редактор Scratch 3"
+              allow="microphone; camera"></iframe>
+      <div class="scratch-loading" id="scratchLoading">Загружаю Scratch…</div>
+    {% else %}
+      <div class="scratch-missing">
+        <h2>Редактор Scratch ещё не собран</h2>
+        <p>Он собирается из открытых исходников один раз:</p>
+        <pre>python manage.py build_scratch</pre>
+      </div>
+    {% endif %}
+  </main>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  {{ project|json_script:"project-data" }}
+  {{ user|json_script:"user-data" }}
+  <script src="{% static 'compiler/scratch-page.js' %}"></script>
+</body>
+</html>

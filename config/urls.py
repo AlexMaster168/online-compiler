@@ -1,16 +1,30 @@
 from django.contrib import admin
 from django.urls import path
 
-from compiler import accounts, views
+from compiler import accounts, esp32_preview, microcontrollers, oauth, scratch, views
 
 urlpatterns = [
+    path("esp32-preview/<str:token>/", esp32_preview.preview),
+    path("esp32-preview/<str:token>/<path:path>", esp32_preview.preview),
+    path("arduino/", microcontrollers.page, name="arduino"),
+    path("arduino/<str:snippet_id>/", microcontrollers.page, name="arduino-project"),
+    path("api/arduino/save/", microcontrollers.save, name="arduino-save"),
+    path("api/arduino/compile/", microcontrollers.compile_uno, name="arduino-compile"),
     path("", views.index, name="index"),
     path("s/<str:snippet_id>/", views.index, name="snippet"),
     path("s/<str:snippet_id>/raw/", views.snippet_raw, name="snippet-raw"),
     path("s/<str:snippet_id>/zip/", views.snippet_zip, name="snippet-zip"),
+    path("reset/<str:uidb64>/<str:token>/", views.index, name="password-reset"),
+    path("u/<str:username>/", accounts.profile_page, name="profile"),
+    path("scratch/", scratch.page, name="scratch"),
+    path("scratch/<str:snippet_id>/", scratch.page, name="scratch-project"),
+    path("auth/<str:provider>/login/", oauth.start, name="oauth-start"),
+    path("auth/<str:provider>/callback/", oauth.callback, name="oauth-callback"),
     path("api/languages/", views.languages, name="api-languages"),
     path("api/run/", views.run, name="api-run"),
     path("api/format/", views.format_code, name="api-format"),
+    path("api/library/", views.library_index, name="api-library"),
+    path("api/library/<str:slug>/<str:algorithm_id>/", views.library_item, name="api-library-item"),
     path("api/zip/", views.project_zip, name="api-zip"),
     path("api/snippets/", views.create_snippet, name="api-snippet-create"),
     path("api/snippets/<str:snippet_id>/", accounts.snippet_detail, name="api-snippet"),
@@ -20,6 +34,12 @@ urlpatterns = [
     path("api/auth/register/", accounts.register, name="api-register"),
     path("api/auth/login/", accounts.login_view, name="api-login"),
     path("api/auth/logout/", accounts.logout_view, name="api-logout"),
+    path("api/auth/password/", accounts.change_password, name="api-password"),
+    path("api/auth/password-reset/", accounts.password_reset, name="api-password-reset"),
+    path("api/auth/password-reset/confirm/", accounts.password_reset_confirm, name="api-password-reset-confirm"),
+    path("api/users/<str:username>/", accounts.profile_api, name="api-profile"),
+    path("api/scratch/", scratch.create, name="api-scratch-create"),
+    path("api/scratch/<str:snippet_id>/", scratch.detail, name="api-scratch"),
     path("api/history/", views.history, name="api-history"),
     path("api/executions/<int:execution_id>/", views.execution_detail, name="api-execution"),
     path("admin/", admin.site.urls),

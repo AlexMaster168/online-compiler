@@ -168,6 +168,7 @@
       if (lines.length) setFileBreakpoints(file, lines);
     }
     openFile(0);
+    if (isBlocks()) syncBlocksFromProject();
   }
 
   function openFile(index) {
@@ -540,6 +541,7 @@
 
   function setRunning(on, { stoppable = false } = {}) {
     state.running = on;
+      if (!on) document.getElementById("esp32Preview")?.remove();
     const btn = $("runBtn");
     const label = $("runLabel");
     clearInterval(tickTimer);
@@ -561,6 +563,9 @@
 
   function run() {
     if (!state.editor || !state.lang) return;
+      if (state.lang.slug === "esp32" && state.mode !== "console") {
+        setMode("console");
+      }
     if (state.mode === "console") {
       if (state.running) consoleSend({ type: "kill" });
       else runConsole();
@@ -780,6 +785,17 @@
   function onConsoleEvent(ev) {
     const term = cons.term;
     if (!term) return;
+      if (ev.type === "esp32_preview") {
+        let link = document.getElementById("esp32Preview");
+        if (!link) {
+          link = document.createElement("a"); link.id = "esp32Preview";
+          link.className = "btn ghost"; link.target = "_blank"; link.rel = "noopener noreferrer";
+          link.textContent = "Открыть сайт ESP32";
+          $("runBtn").parentElement.appendChild(link);
+        }
+        if (/^\/esp32-preview\/[A-Za-z0-9_-]+\/$/.test(ev.url)) link.href = ev.url;
+        return;
+      }
     if (ev.type === "debug_reply") { onDebugReply(ev); return; }
     if (ev.type.startsWith("debug_")) { onDebugEvent(ev); return; }
     if (ev.type === "phase") {
@@ -1365,6 +1381,7 @@
     $("langButton").title = lang.available ? `Запуск через ${lang.backend}` : "Язык сейчас недоступен на сервере";
     $("backendInfo").textContent = lang.available ? `через ${lang.backend}` : "недоступен";
 
+    applyEditorMode();
     setProject(project || draftFor(lang) || { code: lang.template, files: [] });
     renderLangList();
     updateDebugButton();
@@ -1399,7 +1416,17 @@
         <span class="lang-name">${escapeHtml(l.name)}</span>
         ${l.compiled ? `<span class="tag">compiled</span>` : ""}
         <span class="lang-meta">${escapeHtml(l.version)}</span>
-      </li>`).join("") || `<li class="muted">Ничего не нашлось</li>`;
+      </li>`).join("") + scratchItem(q) || `<li class="muted">Ничего не нашлось</li>`;
+  }
+
+  // Scratch 3 — отдельный редактор со сценой и спрайтами: пункт меню ведёт на его страницу
+  function scratchItem(q) {
+    const arduino = (!q || "arduino ардуино uno".includes(q))
+      ? '<li class="lang-link" data-href="/arduino/"><span class="lang-dot on"></span><span>Arduino Uno</span></li>' : '';
+    if (q && !"scratch 3 скретч".includes(q)) return arduino;
+    return `<li class="lang-link" data-href="/scratch/"><span class="lang-dot on"></span>
+      <span class="lang-name">Scratch 3</span><span class="tag">сцена и спрайты</span>
+      <span class="lang-meta">открыть ↗</span></li>` + arduino;
   }
 
   function openMenu(open) {
@@ -1416,6 +1443,8 @@
   $("langButton").addEventListener("click", () => openMenu($("langMenu").hidden));
   $("langSearch").addEventListener("input", renderLangList);
   $("langList").addEventListener("click", (e) => {
+    const link = e.target.closest("li[data-href]");
+    if (link) { location.href = link.dataset.href; return; }
     const li = e.target.closest("li[data-slug]");
     if (!li) return;
     if (li.dataset.slug !== state.lang?.slug) leaveProject();
@@ -1466,6 +1495,7 @@
     const next = currentTheme() === "dark" ? "light" : "dark";
     applyTheme(next);
     store.set("theme", next);
+    window.OCBlocks?.setDark(next === "dark");
     if (cons.term) cons.term.options.theme = terminalTheme();
   });
   $("stdinClear").addEventListener("click", () => { $("stdin").value = ""; });
@@ -1761,6 +1791,8 @@
   // ---------- аккаунт и проекты ----------
   // project — открытый по ссылке /s/<id>/ проект (как его отдал сервер), saved — его снимок на момент сохранения
   const account = { user: readJsonScript("user-data"), project: null, saved: null, authMode: "login" };
+  // Что страница знает о входе: включённые OAuth-провайдеры, ссылка сброса пароля, ошибка входа через соцсеть
+  const auth = { providers: [], reset: null, error: "", ...(readJsonScript("auth-data") || {}) };
 
   const snap = ({ language, code, files = [], args = "", stdin = "" }) =>
     JSON.stringify([language, code, files.map((f) => [f.name, f.content]), args || "", stdin || ""]);
@@ -1799,15 +1831,32 @@
     title.classList.toggle("editable", own);
     title.title = own ? "Переименовать проект" : p.title || "";
     const meta = [];
-    if (p.owner && !own) meta.push(`@${escapeHtml(p.owner)}`);
+    if (p.owner && !own) meta.push(`<a href="/u/${encodeURIComponent(p.owner)}/">@${escapeHtml(p.owner)}</a>`);
     if (p.forked_from) {
       meta.push(`форк от <a href="${escapeHtml(p.forked_from.url)}">${escapeHtml(p.forked_from.title || p.forked_from.id)}</a>`);
     }
     if (p.forks) meta.push(`${p.forks} ${pluralForks(p.forks)}`);
     $("projectMeta").innerHTML = meta.join(" · ");
     $("forkBtn").hidden = own;
+    $("visibilitySelect").hidden = !own;
+    if (own) $("visibilitySelect").value = p.visibility || "unlisted";
     renderDirty();
   }
+
+  $("visibilitySelect").addEventListener("change", async (e) => {
+    const p = account.project;
+    if (!p?.is_owner) return;
+    const labels = { public: "Проект публичный — он виден в твоём профиле", unlisted: "Проект открывается только по ссылке",
+      private: "Проект приватный — его видишь только ты" };
+    try {
+      const saved = await api(`/api/snippets/${p.id}/`, { visibility: e.target.value }, "PATCH");
+      account.project = { ...account.project, visibility: saved.visibility };
+      toast(labels[saved.visibility]);
+    } catch (err) {
+      e.target.value = p.visibility || "unlisted";
+      toast("Не удалось сменить видимость: " + err.message);
+    }
+  });
 
   function renderAccount() {
     const { user } = account;
@@ -1901,13 +1950,22 @@
   });
 
   // ---------- вход / регистрация ----------
+  // Режимы: login, register и reset («Забыли пароль?» — только поле почты)
   function setAuthMode(mode) {
     account.authMode = mode;
     const form = $("authForm");
     form.querySelectorAll("[data-auth]").forEach((b) => b.classList.toggle("on", b.dataset.auth === mode));
-    $("authSubmit").textContent = mode === "login" ? "Войти" : "Зарегистрироваться";
+    $("authSubmit").textContent = { login: "Войти", register: "Зарегистрироваться", reset: "Прислать ссылку" }[mode];
     form.password.autocomplete = mode === "login" ? "current-password" : "new-password";
+    $("authUsernameField").hidden = mode === "reset";
+    $("authPasswordField").hidden = mode === "reset";
+    $("authEmailField").hidden = mode === "login";
+    $("authEmailLabel").innerHTML = mode === "reset" ? "Почта, указанная в аккаунте"
+      : 'Почта <span class="muted">(для сброса пароля, необязательно)</span>';
+    $("forgotBtn").hidden = mode !== "login";
+    $("oauthButtons").hidden = mode === "reset" || !auth.providers.length;
     $("authError").hidden = true;
+    $("authOk").hidden = true;
   }
 
   function openAuth(mode = "login", hint = "") {
@@ -1937,13 +1995,23 @@
     const submit = $("authSubmit");
     submit.disabled = true;
     try {
+      if (account.authMode === "reset") {
+        await api("/api/auth/password-reset/", { email: form.email.value.trim() });
+        $("authOk").textContent = "Если к этой почте привязан аккаунт, письмо со ссылкой уже в пути. Проверь и «Спам».";
+        $("authOk").hidden = false;
+        $("authError").hidden = true;
+        return;
+      }
       const { user } = await api(`/api/auth/${account.authMode}/`, {
         username: form.username.value.trim(), password: form.password.value,
+        ...(account.authMode === "register" ? { email: form.email.value.trim() } : {}),
       });
       form.password.value = "";
       $("authDialog").close();
       await onAuthChanged(user);
       toast(account.authMode === "login" ? `Привет, ${user.username}!` : `Аккаунт ${user.username} создан`);
+      // Пришли со страницы Scratch (?login=1&next=...) — возвращаемся. Только локальные пути: не открытый редирект
+      if (account.afterLogin && /^\/(?!\/)/.test(account.afterLogin)) location.href = account.afterLogin;
     } catch (err) {
       $("authError").textContent = err.message;
       $("authError").hidden = false;
@@ -1952,6 +2020,10 @@
     }
   });
   $("loginBtn").addEventListener("click", () => openAuth("login"));
+  $("forgotBtn").addEventListener("click", () => {
+    setAuthMode("reset");
+    $("authForm").email.focus();
+  });
 
   function toggleUserMenu(open) {
     $("userMenu").hidden = !open;
@@ -1959,6 +2031,13 @@
   }
   $("userBtn").addEventListener("click", () => toggleUserMenu($("userMenu").hidden));
   document.addEventListener("click", (e) => { if (!$("account").contains(e.target)) toggleUserMenu(false); });
+  $("profileBtn").addEventListener("click", () => {
+    if (account.user) location.href = `/u/${encodeURIComponent(account.user.username)}/`;
+  });
+  $("accountSettingsBtn").addEventListener("click", () => {
+    toggleUserMenu(false);
+    openAccountSettings();
+  });
   $("logoutBtn").addEventListener("click", async () => {
     toggleUserMenu(false);
     try {
@@ -1968,8 +2047,99 @@
     } catch (err) { toast(err.message); }
   });
 
+  // ---------- вход через GitHub / Google ----------
+  function initOAuthButtons() {
+    for (const link of $("oauthButtons").querySelectorAll("[data-provider]")) {
+      const enabled = auth.providers.some((p) => p.id === link.dataset.provider);
+      link.hidden = !enabled;
+      // next — вернуться туда же (например, на открытый проект) после входа
+      link.href = `/auth/${link.dataset.provider}/login/?next=${encodeURIComponent(location.pathname)}`;
+    }
+  }
+
+  // ---------- новый пароль по ссылке из письма ----------
+  function openResetConfirm() {
+    $("resetError").hidden = true;
+    $("resetDialog").showModal();
+    $("resetForm").password.focus();
+  }
+  $("resetForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const { user } = await api("/api/auth/password-reset/confirm/", {
+        uid: auth.reset.uid, token: auth.reset.token, password: e.target.password.value,
+      });
+      e.target.password.value = "";
+      $("resetDialog").close();
+      history.replaceState(null, "", "/");  // ссылка одноразовая — убираем её из адресной строки
+      await onAuthChanged(user);
+      toast(`Пароль обновлён, ${user.username}!`);
+    } catch (err) {
+      $("resetError").textContent = err.message;
+      $("resetError").hidden = false;
+    }
+  });
+  $("resetClose").addEventListener("click", () => {
+    $("resetDialog").close();
+    history.replaceState(null, "", "/");
+  });
+
+  // ---------- настройки аккаунта ----------
+  function accountMessage(ok, text) {
+    $("accountOk").hidden = !ok;
+    $("accountError").hidden = ok;
+    (ok ? $("accountOk") : $("accountError")).textContent = text;
+  }
+
+  function openAccountSettings() {
+    const { user } = account;
+    if (!user) return;
+    const emailForm = $("emailForm");
+    emailForm.email.value = user.email || "";
+    emailForm.password.value = "";
+    $("passwordForm").reset();
+    // Аккаунт из GitHub / Google без пароля: текущий пароль не спрашиваем, а пароль можно задать впервые
+    for (const field of $("accountDialog").querySelectorAll("[data-needs-password]")) field.hidden = !user.has_password;
+    $("newPasswordLabel").textContent = user.has_password ? "Новый пароль" : "Задать пароль (сейчас вход только через соцсеть)";
+    $("passwordSubmit").textContent = user.has_password ? "Сменить пароль" : "Задать пароль";
+    const titles = { github: "GitHub", google: "Google" };
+    $("accountProviders").hidden = !user.providers.length;
+    $("accountProviders").textContent = `Привязан вход через: ${user.providers.map((p) => titles[p] || p).join(", ")}`;
+    $("accountOk").hidden = true;
+    $("accountError").hidden = true;
+    $("accountDialog").showModal();
+  }
+
+  $("emailForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const { user } = await api("/api/auth/me/", {
+        email: e.target.email.value.trim(), password: e.target.password.value,
+      }, "PATCH");
+      account.user = user;
+      e.target.password.value = "";
+      accountMessage(true, user.email ? `Почта сохранена: ${user.email}` : "Почта удалена из аккаунта");
+    } catch (err) { accountMessage(false, err.message); }
+  });
+
+  $("passwordForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const { user } = await api("/api/auth/password/", {
+        old_password: e.target.old_password.value, new_password: e.target.new_password.value,
+      });
+      account.user = user;
+      openAccountSettings();  // перерисовываем: у аккаунта без пароля теперь появились поля «текущий пароль»
+      accountMessage(true, "Пароль сохранён");
+    } catch (err) { accountMessage(false, err.message); }
+  });
+  $("accountClose").addEventListener("click", () => $("accountDialog").close());
+  $("accountDialog").addEventListener("click", (e) => { if (e.target === $("accountDialog")) $("accountDialog").close(); });
+
   // ---------- «Мои проекты» ----------
   let projectsQueryTimer = null;
+  const visibilityBadge = (v) => (v === "public" ? '<span class="badge public">публичный</span>'
+    : v === "private" ? '<span class="badge private">приватный</span>' : "");
   async function loadProjects() {
     const list = $("projectsList");
     const q = $("projectsSearch").value.trim();
@@ -1980,14 +2150,15 @@
         return;
       }
       list.innerHTML = items.map((it) => {
-        const lang = state.bySlug[it.language];
+        const lang = it.language === "scratch" ? { name: "Scratch 3" }
+          : it.language === "arduino" ? { name: "Arduino Uno" } : state.bySlug[it.language];
         const forks = it.forks ? `<span>${it.forks} ${pluralForks(it.forks)}</span>` : "";
         const files = it.file_count > 1 ? `<span>${pluralFiles(it.file_count)}</span>` : "";
-        return `<li class="item ${account.project?.id === it.id ? "current" : ""}" data-id="${escapeHtml(it.id)}">
+        return `<li class="item ${account.project?.id === it.id ? "current" : ""}" data-id="${escapeHtml(it.id)}" data-url="${escapeHtml(it.url)}">
           <span class="lang-dot on"></span>
           <div class="p-main">
             <div class="p-title ${it.title ? "" : "untitled"}">${escapeHtml(it.title || "Без названия")}</div>
-            <div class="p-meta"><span>${escapeHtml(lang ? lang.name : it.language)}</span>${files}${forks}
+            <div class="p-meta"><span>${escapeHtml(lang ? lang.name : it.language)}</span>${visibilityBadge(it.visibility)}${files}${forks}
               <span>изменён ${timeAgo(it.updated_at)}</span></div>
           </div>
           <button class="icon-btn small p-delete" title="Удалить проект" aria-label="Удалить проект">
@@ -1999,7 +2170,8 @@
     }
   }
 
-  async function openProject(id) {
+  async function openProject(id, url) {
+    if (url?.startsWith("/scratch/") || url?.startsWith("/arduino/")) { location.href = url; return; }
     try {
       const p = await api(`/api/snippets/${encodeURIComponent(id)}/`);
       selectLanguage(p.language, { code: p.code, files: p.files || [], args: p.args || "" });
@@ -2037,12 +2209,141 @@
       } catch (err) { toast("Не удалось удалить: " + err.message); }
       return;
     }
-    openProject(item.dataset.id);
+    openProject(item.dataset.id, item.dataset.url);
   });
 
   window.addEventListener("beforeunload", (e) => {
     if (isDirty()) { e.preventDefault(); e.returnValue = ""; }
   });
+
+  // ---------- библиотека алгоритмов ----------
+  const libraryCache = {};  // slug -> {categories, items}
+  let libraryQueryTimer = null;
+
+  async function loadLibrary(slug) {
+    if (!libraryCache[slug]) libraryCache[slug] = await api(`/api/library/?language=${encodeURIComponent(slug)}`);
+    return libraryCache[slug];
+  }
+
+  function renderLibrary(data) {
+    const q = $("librarySearch").value.trim().toLowerCase();
+    const match = (it) => !q || it.title.toLowerCase().includes(q) || it.description.toLowerCase().includes(q)
+      || it.category.toLowerCase().includes(q);
+    const groups = data.categories
+      .map((category) => ({ category, items: data.items.filter((it) => it.category === category && match(it)) }))
+      .filter((g) => g.items.length);
+    $("libraryList").innerHTML = groups.length ? groups.map((g) => `
+      <section class="library-group">
+        <h4>${escapeHtml(g.category)}</h4>
+        ${g.items.map((it) => `
+          <button class="library-item" data-id="${escapeHtml(it.id)}">
+            <div class="l-title">${escapeHtml(it.title)}</div>
+            <div class="l-desc">${escapeHtml(it.description)}</div>
+          </button>`).join("")}
+      </section>`).join("")
+      : `<p class="muted pad">${data.items.length ? "Ничего не нашлось" : "Для этого языка примеров пока нет"}</p>`;
+  }
+
+  async function openLibrary() {
+    if (!state.lang) return;
+    $("libraryTitle").textContent = `Примеры: ${state.lang.name}`;
+    $("librarySearch").value = "";
+    $("libraryList").innerHTML = `<p class="muted pad">Загружаю…</p>`;
+    $("libraryDialog").showModal();
+    $("librarySearch").focus();
+    try {
+      renderLibrary(await loadLibrary(state.lang.slug));
+    } catch (err) {
+      $("libraryList").innerHTML = `<p class="muted pad">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  async function insertExample(id) {
+    const slug = state.lang.slug;
+    try {
+      const example = await api(`/api/library/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/`);
+      const current = state.files[0]?.model.getValue() ?? "";
+      const hasOwnCode = state.files.length > 1 || (current.trim() && current !== state.lang.template);
+      if (hasOwnCode && !confirm(`Заменить текущий код примером «${example.title}»? `
+          + "Свой код сохрани (Ctrl+S), если он нужен.")) return;
+      $("libraryDialog").close();
+      leaveProject();
+      setProject({ code: example.code, files: [] });
+      scheduleDraftSave();
+      toast(`${example.title} — жми Ctrl+Enter`);
+    } catch (err) {
+      toast("Не удалось открыть пример: " + err.message);
+    }
+  }
+
+  $("libraryBtn").addEventListener("click", openLibrary);
+  $("libraryClose").addEventListener("click", () => $("libraryDialog").close());
+  $("libraryDialog").addEventListener("click", (e) => { if (e.target === $("libraryDialog")) $("libraryDialog").close(); });
+  $("librarySearch").addEventListener("input", () => {
+    clearTimeout(libraryQueryTimer);
+    libraryQueryTimer = setTimeout(() => {
+      const data = libraryCache[state.lang?.slug];
+      if (data) renderLibrary(data);
+    }, 120);
+  });
+  $("libraryList").addEventListener("click", (e) => {
+    const item = e.target.closest(".library-item");
+    if (item) insertExample(item.dataset.id);
+  });
+
+  // ---------- режим блоков ----------
+  // Язык с editor === "blocks": слева Blockly, под ним — сгенерированный main.py (только чтение).
+  // Блоки лежат в файле проекта blocks.json, так что сохранение, шаринг и черновики работают как обычно.
+  const BLOCKS_FILE = "blocks.json";
+  const isBlocks = () => state.lang?.editor === "blocks";
+  let blocksSync = 0;  // номер последней загрузки: устаревшие асинхронные загрузки не перетирают новые
+
+  function applyEditorMode() {
+    const blocks = isBlocks();
+    const pane = $("editor").closest(".editor-pane");
+    pane.classList.toggle("blocks-mode", blocks);
+    pane.classList.toggle("hide-code", blocks && !store.get("blocksShowCode", true));
+    $("blocksArea").hidden = !blocks;
+    $("blocksCodeBtn").hidden = !blocks;
+    $("blocksCodeBtn").classList.toggle("on", store.get("blocksShowCode", true));
+    state.editor?.updateOptions({ readOnly: blocks });
+    state.editor?.layout();
+  }
+
+  function applyBlocks(json, python) {
+    const [main] = state.files;
+    if (!main) return;
+    if (main.model.getValue() !== python) main.model.setValue(python);
+    const file = state.files.find((f) => f.name === BLOCKS_FILE);
+    if (file) {
+      if (file.model.getValue() !== json) file.model.setValue(json);
+    } else {
+      state.files.push(createFile(BLOCKS_FILE, json));
+    }
+    scheduleDraftSave();
+  }
+
+  async function syncBlocksFromProject() {
+    const ticket = ++blocksSync;
+    try {
+      await window.OCBlocks.mount($("blocksArea"), { dark: currentTheme() === "dark", onChange: applyBlocks });
+      $("blocksArea").querySelector(".editor-loading")?.remove();
+      if (ticket !== blocksSync || !isBlocks()) return;
+      const saved = state.files.find((f) => f.name === BLOCKS_FILE)?.model.getValue();
+      const { json, python } = window.OCBlocks.load(saved);
+      applyBlocks(json, python);
+      window.OCBlocks.resize();
+    } catch (err) {
+      toast("Не загрузились блоки: " + err.message);
+    }
+  }
+
+  $("blocksCodeBtn").addEventListener("click", () => {
+    store.set("blocksShowCode", !store.get("blocksShowCode", true));
+    applyEditorMode();
+    window.OCBlocks.resize();
+  });
+  new ResizeObserver(() => { if (isBlocks()) window.OCBlocks.resize(); }).observe($("blocksArea"));
 
   // ---------- resizable split ----------
   (function initSplit() {
@@ -2078,6 +2379,133 @@
   })();
 
   // ---------- Monaco ----------
+  // Подсветка языков, которых нет в Monaco: компактный Monarch по описанию (ключевые слова, комментарии, строки)
+  const SIMPLE_LANGUAGES = {
+    fortran: {
+      ignoreCase: true, line: "!", strings: ["\"", "'"],
+      keywords: ("program end module use implicit none integer real double precision complex logical character parameter "
+        + "dimension allocatable allocate deallocate intent in out inout function subroutine call return if then else "
+        + "elseif endif do enddo while exit cycle select case default contains type print write read stop result "
+        + "recursive pure elemental interface save data go to format open close mod abs sqrt size len trim").split(" "),
+    },
+    asm: {
+      line: ";", strings: ["\"", "'", "`"],
+      keywords: ("mov movzx movsx lea push pop call ret jmp je jne jz jnz jg jge jl jle ja jae jb jbe cmp test add sub "
+        + "imul mul idiv div inc dec neg and or xor not shl shr sar cqo cdq loop nop syscall leave enter "
+        + "section global extern db dw dd dq resb resw resd resq equ times bits default rel wrt plt").split(" "),
+      types: ("rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15 eax ebx ecx edx esi edi ebp esp "
+        + "r8d r9d r10d r11d r12d r13d r14d r15d ax bx cx dx al bl cl dl ah bh ch dh sil dil byte word dword qword").split(" "),
+    },
+    prolog: {
+      line: "%", block: ["/*", "*/"], strings: ["\"", "'", "`"], upperIsType: true,
+      keywords: ("is mod rem not true fail call findall bagof setof assert asserta assertz retract format write writeln "
+        + "nl halt length append member msort sort nth0 nth1 between succ plus atom number var nonvar initialization").split(" "),
+    },
+    ocaml: {
+      block: ["(*", "*)"], strings: ["\""],
+      keywords: ("let in rec and if then else match with function fun type of module struct sig end open begin "
+        + "val mutable for to downto do done while try raise exception when as not ref true false").split(" "),
+      types: "int float string bool char unit list array option Printf List Array String Hashtbl Queue".split(" "),
+    },
+    erlang: {
+      line: "%", strings: ["\""], upperIsType: true,
+      keywords: ("module export import define record case of if when end fun receive after try catch throw "
+        + "begin andalso orelse not and or div rem band bor bxor bsl bsr spawn true false").split(" "),
+    },
+    zig: {
+      line: "//", strings: ["\""],
+      keywords: ("const var fn pub return if else while for switch break continue defer errdefer try catch orelse "
+        + "struct enum union error comptime inline export extern test undefined null true false and or unreachable").split(" "),
+      types: "u8 u16 u32 u64 usize i8 i16 i32 i64 isize f32 f64 bool void anyerror type anytype".split(" "),
+    },
+    nim: {
+      line: "#", block: ["#[", "]#"], strings: ["\""],
+      keywords: ("proc func let var const if elif else while for in return result echo import from type object "
+        + "ref seq array of case when break continue and or not div mod shl shr iterator yield discard true false").split(" "),
+      types: "int int64 float string bool char seq openArray".split(" "),
+    },
+    d: {
+      line: "//", block: ["/*", "*/"], strings: ["\"", "`"],
+      keywords: ("import module void auto const immutable return if else while for foreach do switch case default "
+        + "break continue struct class interface enum static ref in out new null true false this alias").split(" "),
+      types: "int long uint ulong short byte ubyte bool char string double float size_t real".split(" "),
+    },
+    cobol: {
+      ignoreCase: true, line: "*>", strings: ["\"", "'"],
+      keywords: ("identification division program-id data working-storage section procedure pic value display "
+        + "accept move to add subtract multiply divide giving compute if else end-if perform until varying from by "
+        + "end-perform stop run function trim occurs times indexed using call evaluate when end-evaluate "
+        + "other not greater less than equal and or is zero spaces").split(" "),
+    },
+    ada: {
+      ignoreCase: true, line: "--", strings: ["\""],
+      keywords: ("with use procedure function is begin end if then elsif else loop for in reverse while return "
+        + "declare type array of range constant record package body new null and or not mod rem exit when "
+        + "case others out access").split(" "),
+      types: "integer natural positive float boolean character string".split(" "),
+    },
+    lisp: {
+      line: ";", block: ["#|", "|#"], strings: ["\""],
+      keywords: ("defun defvar defparameter defmacro let let* lambda if when unless cond case loop do dotimes dolist "
+        + "progn setf setq return return-from and or not format funcall apply mapcar list cons car cdr nil t "
+        + "make-array aref vector length push pop").split(" "),
+    },
+    groovy: {
+      line: "//", block: ["/*", "*/"], strings: ["\"", "'"],
+      keywords: ("def class interface enum static final void return if else for while in switch case default break "
+        + "continue new null true false import package try catch finally throw this super println").split(" "),
+      types: "int long double float boolean char String List Map Integer".split(" "),
+    },
+  };
+
+  function registerSimpleLanguages(monaco) {
+    const known = new Set(monaco.languages.getLanguages().map((l) => l.id));
+    for (const [id, spec] of Object.entries(SIMPLE_LANGUAGES)) {
+      if (known.has(id)) continue;
+      // Ошибка в грамматике одного языка не должна ронять весь редактор — язык просто останется без подсветки
+      try {
+        registerSimpleLanguage(monaco, id, spec);
+      } catch (err) {
+        console.warn(`Подсветка ${id} не зарегистрирована:`, err);
+      }
+    }
+  }
+
+  function registerSimpleLanguage(monaco, id, spec) {
+    monaco.languages.register({ id });
+    const root = [];
+    if (spec.line) root.push([new RegExp(`${escapeRe(spec.line)}.*$`), "comment"]);
+    if (spec.block) root.push([new RegExp(escapeRe(spec.block[0])), "comment", "@comment"]);
+    for (const q of spec.strings || []) {
+      root.push([new RegExp(`${escapeRe(q)}(?:[^${escapeRe(q)}\\\\]|\\\\.)*${escapeRe(q)}`), "string"]);
+    }
+    root.push([/\b(?:0x[0-9a-fA-F_]+|\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/, "number"]);
+    root.push([/[A-Za-z_][\w\-?!*]*/, {
+      cases: {
+        "@keywords": "keyword",
+        "@types": "type",
+        ...(spec.upperIsType ? { "[A-Z_].*": "type" } : {}),
+        "@default": "identifier",
+      },
+    }]);
+    root.push([/[{}()[\]]/, "@brackets"]);
+    const comment = spec.block
+      ? [[new RegExp(escapeRe(spec.block[1])), "comment", "@pop"], [/./, "comment"]]
+      : [[/./, "comment", "@pop"]];
+    monaco.languages.setMonarchTokensProvider(id, {
+      ignoreCase: !!spec.ignoreCase,
+      keywords: spec.keywords || [],
+      types: spec.types || [],
+      tokenizer: { root, comment },
+    });
+    monaco.languages.setLanguageConfiguration(id, {
+      comments: { lineComment: spec.line, blockComment: spec.block },
+      brackets: [["(", ")"], ["[", "]"], ["{", "}"]],
+      autoClosingPairs: [{ open: "(", close: ")" }, { open: "[", close: "]" }, { open: "{", close: "}" },
+        ...(spec.strings || []).map((q) => ({ open: q, close: q }))],
+    });
+  }
+
   function registerExtraLanguages(monaco) {
     // В Monaco нет Haskell — даём простой Monarch-токенайзер
     if (!monaco.languages.getLanguages().some((l) => l.id === "haskell")) {
@@ -2197,6 +2625,7 @@
         } catch { /* другая сборка Monaco — оставляем как есть */ }
       }, () => { /* модуля нет — не критично */ });
       registerExtraLanguages(monaco);
+      registerSimpleLanguages(monaco);
       configureTypeScript(monaco);
       defineThemes(monaco);
       $("editor").innerHTML = "";
@@ -2271,6 +2700,7 @@
 
       const pending = state.pending;
       state.pending = null;
+      applyEditorMode();
       if (pending) setProject(pending);
       maybeRegisterHover();
       setKeymap(settings.keymap);
@@ -2292,6 +2722,18 @@
     if (store.get("history", false) && innerWidth > 860) $("history").hidden = false;
 
     renderAccount();
+    initOAuthButtons();
+    const params = new URLSearchParams(location.search);
+    if (params.has("login") && !account.user) {
+      account.afterLogin = params.get("next") || "";
+      history.replaceState(null, "", location.pathname);
+      openAuth("login", "Войди — и вернёмся туда, откуда пришли");
+    }
+    if (auth.reset) openResetConfirm();
+    if (auth.error) {
+      toast(auth.error);
+      history.replaceState(null, "", location.pathname);
+    }
     initMonaco(); // грузится параллельно со списком языков
 
     let data;

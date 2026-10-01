@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class DockerSpec:
     compile: str | None = None
     memory_mb: int | None = None
     env: tuple[tuple[str, str], ...] = ()
+    cpus: float = 1
 
 
 @dataclass(frozen=True)
@@ -73,15 +75,23 @@ class Language:
     debug: DebugSpec | None = None
     # Медленным компиляторам (kotlinc на одном ядре — до минуты) общий лимит мал
     compile_timeout: float | None = None
+    run_timeout: float | None = None
     # Форматирование (Beautify): имя WASM-форматтера в браузере (ruff, clang, biome, gofmt, sql, lua, shfmt, dart)
     # или FormatSpec — форматтер в контейнере
     formatter: str | FormatSpec | None = None
+    # Чем редактируется: code — Monaco; blocks — блоки в стиле Scratch, из которых генерируется main.py
+    editor: str = "code"
+    # Есть ли язык в библиотеке алгоритмов (у блоков своих сниппетов нет — они собираются мышкой)
+    library: bool = True
 
     def config(self, cfg: dict) -> dict:
         """Настройки движка с поправками под язык."""
+        adjusted = dict(cfg)
         if self.compile_timeout and self.compile_timeout > cfg["COMPILE_TIMEOUT"]:
-            return {**cfg, "COMPILE_TIMEOUT": self.compile_timeout}
-        return cfg
+            adjusted["COMPILE_TIMEOUT"] = self.compile_timeout
+        if self.run_timeout:
+            adjusted["RUN_TIMEOUT"] = self.run_timeout
+        return adjusted
 
     @property
     def compiled(self) -> bool:
@@ -142,6 +152,43 @@ CSPROJ = """<Project Sdk="Microsoft.NET.Sdk">
   </PropertyGroup>
 </Project>
 """
+
+VBPROJ = """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net{dotnet_major}.0</TargetFramework>
+    <AssemblyName>main</AssemblyName>
+    <RootNamespace>Main</RootNamespace>
+    <OptionStrict>Off</OptionStrict>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>
+"""
+
+# В F# порядок файлов важен — главный файл последним в списке Compile
+FSPROJ = """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net{dotnet_major}.0</TargetFramework>
+    <AssemblyName>main</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>
+"""
+# EnableWriteXorExecute=0: с W^X рантайм .NET 7+ держит JIT-память в двойном отображении через файл и растягивает
+# его ftruncate'ом за лимит песочницы (--ulimit fsize=64M) — процесс падает по SIGXFSZ с кодом 153 и пустым выводом
+_DOTNET_ENV = (("DOTNET_CLI_TELEMETRY_OPTOUT", "1"), ("DOTNET_NOLOGO", "1"), ("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1"),
+               ("MSBUILDDISABLENODEREUSE", "1"), ("DOTNET_EnableWriteXorExecute", "0"))
+
+# Свои образы (manage.py build_sandbox): системные компилируемые языки и JVM-языки без сети
+_EXTRA = "oc-lang-extra:1"
+_JVM_LANGS = "oc-lang-jvm:1"
 
 # javac на Windows пишет ошибки в ANSI-кодировке — принудительно UTF-8
 _JAVAC_UTF8 = ("-J-Dfile.encoding=UTF-8", "-J-Dstdout.encoding=UTF-8", "-J-Dstderr.encoding=UTF-8",
@@ -241,8 +288,7 @@ LANGUAGES: tuple[Language, ...] = (
             image="mcr.microsoft.com/dotnet/sdk:8.0", memory_mb=1024,
             compile="dotnet build -c Release -o out --nologo -v q -clp:NoSummary -p:TargetFramework=net8.0",
             run="dotnet out/main.dll",
-            env=(("DOTNET_CLI_TELEMETRY_OPTOUT", "1"), ("DOTNET_NOLOGO", "1"), ("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1"),
-                 ("MSBUILDDISABLENODEREUSE", "1")),
+            env=_DOTNET_ENV,
         ),
         local=LocalSpec(
             compile=("dotnet", "build", "-c", "Release", "-o", "out", "--nologo", "-v", "q", "-clp:NoSummary", "-nodeReuse:false"),
@@ -343,7 +389,7 @@ LANGUAGES: tuple[Language, ...] = (
     Language(
         slug="swift", name="Swift", version="5.10", monaco="swift", filename="main.swift",
         template='let name = "мир"\nprint("Привет, \\(name)!")\n',
-        docker=DockerSpec(image="swift:5.10-slim", compile="swiftc -O -o main {sources}", run="./main", memory_mb=1536),
+        docker=DockerSpec(image="swift:5.10", compile="swiftc -O -o main {sources}", run="./main", memory_mb=1536),
         local=LocalSpec(compile=("swiftc", "-O", "-o", "{bin}", "{sources}"), run=("{bin}",)),
         sources=(".swift",),
     ),
@@ -374,6 +420,189 @@ LANGUAGES: tuple[Language, ...] = (
         docker=DockerSpec(image="python:3.13-alpine", run="python -u .sql_runner.py"),
         local=LocalSpec(run=("{python}", "-X", "utf8", "-u", ".sql_runner.py")),
         extra_files=((".sql_runner.py", SQL_RUNNER),),
+    ),
+    Language(
+        slug="blocks", name="Блоки", version="Scratch-стиль → Python", monaco="python", filename="main.py",
+        # Проект блоков: blocks.json (сами блоки) + main.py (сгенерированный из них Python). Шаблон — только main.py,
+        # стартовые блоки собирает редактор в браузере
+        template='print("Привет, мир!")\n',
+        docker=DockerSpec(image="python:3.13-alpine", run="python -u main.py"),
+        local=LocalSpec(run=("{python}", "-X", "utf8", "-u", "main.py")),
+        editor="blocks", library=False,
+    ),
+    # ---------- этап 5: ещё 20 языков ----------
+    Language(
+        slug="pascal", name="Pascal", version="Free Pascal 3.2", monaco="pascal", filename="main.pas",
+        template="program Main;\n\nvar\n  name: string;\nbegin\n  name := 'мир';\n  writeln('Привет, ', name, '!');\nend.\n",
+        docker=DockerSpec(image=_EXTRA, compile="fpc -O2 -l- -vewn -omain main.pas", run="./main"),
+    ),
+    Language(
+        slug="fortran", name="Fortran", version="GFortran 14 (F2018)", monaco="fortran", filename="main.f90",
+        sources=(".f90",),
+        template="program main\n  implicit none\n  character(len=*), parameter :: name = 'мир'\n"
+                 "  print '(a)', 'Привет, ' // name // '!'\nend program main\n",
+        docker=DockerSpec(image=_EXTRA, compile="gfortran -O2 -o main {sources}", run="./main"),
+    ),
+    Language(
+        slug="assembly", name="Assembly", version="NASM x86-64", monaco="asm", filename="main.asm",
+        template=("; x86-64 Linux, NASM. Слинковано с libc — можно звать printf, scanf, puts\n"
+                  "        global  main\n        extern  printf\n\n        section .data\n"
+                  "msg:    db      \"Привет, %s!\", 10, 0\nname:   db      \"мир\", 0\n\n"
+                  "        section .text\nmain:\n        push    rbp\n        lea     rdi, [rel msg]\n"
+                  "        lea     rsi, [rel name]\n        xor     eax, eax\n        call    printf wrt ..plt\n"
+                  "        pop     rbp\n        xor     eax, eax\n        ret\n"),
+        docker=DockerSpec(image=_EXTRA, compile="nasm -f elf64 -o main.o main.asm && gcc -o main main.o", run="./main"),
+    ),
+    Language(
+        slug="prolog", name="Prolog", version="SWI-Prolog 9", monaco="prolog", filename="main.pl",
+        template=":- initialization(main, main).\n\nmain :-\n    Name = 'мир',\n    format(\"Привет, ~w!~n\", [Name]).\n",
+        docker=DockerSpec(image=_EXTRA, run="swipl -q main.pl"),
+    ),
+    Language(
+        slug="vbnet", name="Visual Basic .NET", version=".NET", monaco="vb", filename="Program.vb",
+        template='Module Program\n    Sub Main()\n        Dim name As String = "мир"\n'
+                 '        Console.WriteLine("Привет, " & name & "!")\n    End Sub\nEnd Module\n',
+        docker=DockerSpec(
+            image="mcr.microsoft.com/dotnet/sdk:8.0", memory_mb=1024,
+            compile="dotnet build -c Release -o out --nologo -v q -clp:NoSummary -p:TargetFramework=net8.0",
+            run="dotnet out/main.dll", env=_DOTNET_ENV,
+        ),
+        extra_files=(("main.vbproj", VBPROJ),),
+    ),
+    Language(
+        slug="objc", name="Objective-C", version="GCC 14 + GNUstep", monaco="objective-c", filename="main.m",
+        sources=(".m",),
+        # GCC-шный Objective-C не знает @autoreleasepool (это clang) — классический NSAutoreleasePool
+        template=('#import <Foundation/Foundation.h>\n\nint main(void) {\n'
+                  '    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];\n'
+                  '    NSString *name = @"мир";\n    printf("Привет, %s!\\n", [name UTF8String]);\n'
+                  '    [pool drain];\n    return 0;\n}\n'),
+        docker=DockerSpec(
+            image=_EXTRA,
+            # -std=gnu11: для Objective-C GCC по умолчанию берёт C89 — без него не работает даже for (int i = ...)
+            compile="gcc -O2 -std=gnu11 -o main {sources} $(gnustep-config --objc-flags) -lgnustep-base -lobjc",
+            run="./main",
+        ),
+    ),
+    Language(
+        slug="scala", name="Scala", version="3.3 LTS", monaco="scala", filename="Main.scala", compile_timeout=120,
+        sources=(".scala",),
+        template='object Main:\n  def main(args: Array[String]): Unit =\n    val name = "мир"\n    println(s"Привет, $name!")\n',
+        docker=DockerSpec(
+            image=_JVM_LANGS, memory_mb=1536,
+            compile="scalac -J-Xss16m -d . {sources}",
+            run="java " + " ".join(_JVM) + " -cp '.:/opt/scala3/lib/*' Main",
+        ),
+    ),
+    Language(
+        slug="fsharp", name="F#", version=".NET", monaco="fsharp", filename="Program.fs",
+        template='let name = "мир"\nprintfn "Привет, %s!" name\n',
+        docker=DockerSpec(
+            image="mcr.microsoft.com/dotnet/sdk:8.0", memory_mb=1536,
+            compile="dotnet build -c Release -o out --nologo -v q -clp:NoSummary -p:TargetFramework=net8.0",
+            run="dotnet out/main.dll", env=_DOTNET_ENV,
+        ),
+        extra_files=(("main.fsproj", FSPROJ),),
+        compile_timeout=90,
+    ),
+    Language(
+        slug="ocaml", name="OCaml", version="5", monaco="ocaml", filename="main.ml",
+        template='let () =\n  let name = "мир" in\n  Printf.printf "Привет, %s!\\n" name\n',
+        docker=DockerSpec(image=_EXTRA, compile="ocamlopt -o main main.ml",
+                          run="./main"),
+    ),
+    Language(
+        slug="erlang", name="Erlang", version="OTP 27", monaco="erlang", filename="main.erl",
+        template='-module(main).\n-export([main/0]).\n\nmain() ->\n    Name = "мир",\n'
+                 '    io:format("Привет, ~ts!~n", [Name]).\n',
+        docker=DockerSpec(image="erlang:27-alpine", compile="erlc main.erl",
+                          run="erl -noshell -noinput +pc unicode -s main main -s init stop"),
+    ),
+    Language(
+        slug="clojure", name="Clojure", version="1.12", monaco="clojure", filename="main.clj",
+        template='(def name "мир")\n(println (str "Привет, " name "!"))\n',
+        docker=DockerSpec(
+            image=_JVM_LANGS, memory_mb=1024,
+            run="java " + " ".join(_JVM) + " -cp '/opt/clojure/*' clojure.main main.clj",
+        ),
+    ),
+    Language(
+        slug="julia", name="Julia", version="1.11", monaco="julia", filename="main.jl",
+        template='name = "мир"\nprintln("Привет, $(name)!")\n',
+        docker=DockerSpec(image="julia:1.11", run="julia --startup-file=no main.jl", memory_mb=1024),
+    ),
+    Language(
+        slug="zig", name="Zig", version="0.13", monaco="zig", filename="main.zig",
+        template=('const std = @import("std");\n\npub fn main() !void {\n    const name = "мир";\n'
+                  '    const out = std.io.getStdOut().writer();\n    try out.print("Привет, {s}!\\n", .{name});\n}\n'),
+        docker=DockerSpec(
+            image=_EXTRA, memory_mb=1024,
+            # Прогретый в образе кеш std/compiler_rt: без него каждая сборка ~25 с
+            compile="cp -r /opt/zig-cache /tmp/zig-global && zig build-exe -O ReleaseSafe -femit-bin=main main.zig",
+            run="./main",
+            env=(("ZIG_GLOBAL_CACHE_DIR", "/tmp/zig-global"), ("ZIG_LOCAL_CACHE_DIR", "/tmp/zig-local")),
+        ),
+        compile_timeout=90,
+    ),
+    Language(
+        slug="nim", name="Nim", version="2.2", monaco="nim", filename="main.nim",
+        template='let name = "мир"\necho "Привет, ", name, "!"\n',
+        docker=DockerSpec(image="nimlang/nim:2.2.0-alpine",
+                          compile="nim c -d:release --hints:off --nimcache:/tmp/nimcache -o:main main.nim",
+                          run="./main"),
+    ),
+    Language(
+        slug="crystal", name="Crystal", version="1.14", monaco="ruby", filename="main.cr",
+        template='name = "мир"\nputs "Привет, #{name}!"\n',
+        docker=DockerSpec(image="crystallang/crystal:1.14-alpine", compile="crystal build -o main main.cr",
+                          run="./main", memory_mb=1024, env=(("CRYSTAL_CACHE_DIR", "/tmp/crystal"),)),
+        compile_timeout=90,
+    ),
+    Language(
+        slug="d", name="D", version="GDC 14", monaco="d", filename="main.d", sources=(".d",),
+        template='import std.stdio;\n\nvoid main()\n{\n    string name = "мир";\n    writeln("Привет, ", name, "!");\n}\n',
+        docker=DockerSpec(image=_EXTRA, compile="gdc -O2 -o main {sources}", run="./main"),
+    ),
+    Language(
+        slug="cobol", name="COBOL", version="GnuCOBOL 3", monaco="cobol", filename="main.cob",
+        template=("IDENTIFICATION DIVISION.\nPROGRAM-ID. MAIN.\nDATA DIVISION.\nWORKING-STORAGE SECTION.\n"
+                  "01 WS-NAME PIC X(10) VALUE \"мир\".\nPROCEDURE DIVISION.\n"
+                  "    DISPLAY \"Привет, \" FUNCTION TRIM(WS-NAME) \"!\".\n    STOP RUN.\n"),
+        docker=DockerSpec(image=_EXTRA, compile="cobc -x -free -O -o main main.cob", run="./main"),
+    ),
+    Language(
+        slug="ada", name="Ada", version="GNAT 14", monaco="ada", filename="main.adb",
+        template=('with Ada.Text_IO; use Ada.Text_IO;\n\nprocedure Main is\n   Name : constant String := "мир";\n'
+                  'begin\n   Put_Line ("Привет, " & Name & "!");\nend Main;\n'),
+        docker=DockerSpec(image=_EXTRA, compile="gnatmake -q -O2 main.adb -o main", run="./main"),
+    ),
+    Language(
+        slug="commonlisp", name="Common Lisp", version="SBCL 2", monaco="lisp", filename="main.lisp",
+        template='(defvar *name* "мир")\n(format t "Привет, ~a!~%" *name*)\n',
+        docker=DockerSpec(image=_EXTRA, run="sbcl --script main.lisp", memory_mb=1024),
+    ),
+    Language(
+        slug="groovy", name="Groovy", version="4", monaco="groovy", filename="main.groovy",
+        template='def name = "мир"\nprintln "Привет, ${name}!"\n',
+        docker=DockerSpec(image="groovy:4.0-jdk21-alpine", run="groovy main.groovy", memory_mb=1024,
+                          env=(("JAVA_OPTS", "-XX:+UseSerialGC -Xss16m -Xmx384m -Dfile.encoding=UTF-8"),)),
+    ),
+    Language(
+        slug="esp32", name="ESP32 · Serial", version="ESP-IDF 5.4 / QEMU", monaco="c",
+        filename="main.c", library=False, compile_timeout=600, run_timeout=120,
+        template=(Path(__file__).parent / "sandbox/esp32/main/main.c").read_text(encoding="utf-8"),
+        extra_files=(("CMakeLists.txt", 'cmake_minimum_required(VERSION 3.16)\n'
+                      'include($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(oc_esp32)\n'),
+                     ("main/CMakeLists.txt", 'idf_component_register(SRCS "../main.c" INCLUDE_DIRS ".")\n'),
+                     ("sdkconfig.defaults", 'CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y\nCONFIG_ETH_USE_OPENETH=y\n')),
+        docker=DockerSpec(image="oc-lang-esp32:1", memory_mb=2048, cpus=2,
+                          compile='. /opt/esp/idf/export.sh >/dev/null && idf.py -B build build && '
+                                  '(cd build && esptool.py --chip esp32 merge_bin --fill-flash-size 4MB '
+                                  '--output qemu_flash.bin @flash_args)',
+                          run="bash -c '. /opt/esp/idf/export.sh >/dev/null && exec qemu-system-xtensa -nographic "
+                              "-machine esp32 -drive file=build/qemu_flash.bin,if=mtd,format=raw "
+                              "-monitor none -serial stdio "
+                              "-nic user,model=open_eth,restrict=on,hostfwd=tcp:127.0.0.1:8080-:80'"),
     ),
 )
 

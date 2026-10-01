@@ -1,0 +1,69 @@
+{% load static %}<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ profile.username }} · Online Compiler</title>
+  <meta name="description" content="Публичные проекты {{ profile.username }} на Online Compiler.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c5cff'/><path d='M12 10l-6 6 6 6M20 10l6 6-6 6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'compiler/app.css' %}">
+  <script>
+    // Та же тема, что в редакторе (ключ oc:theme), — до отрисовки, чтобы не мигало
+    try {
+      const t = JSON.parse(localStorage.getItem("oc:theme"));
+      document.documentElement.dataset.theme = t || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    } catch (e) {}
+  </script>
+</head>
+<body class="page">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></span>
+      <span class="brand-name">Online&nbsp;Compiler</span>
+    </a>
+    <div class="actions">
+      <a class="btn ghost" href="/">← В редактор</a>
+    </div>
+  </header>
+
+  <main class="profile">
+    <section class="profile-head">
+      <span class="avatar big">{{ profile.username|first|upper }}</span>
+      <div>
+        <h1>{{ profile.username }}</h1>
+        <p class="muted">С нами с {{ profile.date_joined|date:"j E Y" }} · публичных проектов: {{ projects|length }}</p>
+      </div>
+    </section>
+
+    {% if projects %}
+      <ul class="profile-projects">
+        {% for p in projects %}
+          <li>
+            <a class="profile-card" href="{{ p.url }}">
+              <span class="p-title {% if not p.title %}untitled{% endif %}">{{ p.title|default:"Без названия" }}</span>
+              <span class="p-meta">
+                <span>{{ p.language_name }}</span>
+                {% if p.file_count > 1 %}<span>файлов: {{ p.file_count }}</span>{% endif %}
+                {% if p.forks %}<span>форков: {{ p.forks }}</span>{% endif %}
+                <span>изменён {{ p.updated_at|slice:":10" }}</span>
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted empty">
+        {% if is_me %}
+          Публичных проектов пока нет. Открой проект в редакторе и выбери «Публичный» рядом с названием —
+          он появится здесь.
+        {% else %}
+          У {{ profile.username }} пока нет публичных проектов.
+        {% endif %}
+      </p>
+    {% endif %}
+  </main>
+</body>
+</html>

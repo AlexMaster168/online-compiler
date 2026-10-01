@@ -1,0 +1,27 @@
+*> Числа Фибоначчи итеративно. PIC 9(18) — 18 десятичных цифр, F(50) помещается с запасом.
+IDENTIFICATION DIVISION.
+PROGRAM-ID. FIBONACCI.
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01 WS-A     PIC 9(18) VALUE 0.
+01 WS-B     PIC 9(18) VALUE 1.
+01 WS-T     PIC 9(18).
+01 WS-I     PIC 9(4).
+01 WS-OUT   PIC Z(17)9.
+PROCEDURE DIVISION.
+    DISPLAY "Fibonacci:" WITH NO ADVANCING
+    PERFORM VARYING WS-I FROM 0 BY 1 UNTIL WS-I > 50
+        IF WS-I < 15
+            MOVE WS-A TO WS-OUT
+            DISPLAY " " FUNCTION TRIM(WS-OUT) WITH NO ADVANCING
+        END-IF
+        IF WS-I = 50
+            DISPLAY SPACE
+            MOVE WS-A TO WS-OUT
+            DISPLAY "F(50) = " FUNCTION TRIM(WS-OUT)
+        END-IF
+        COMPUTE WS-T = WS-A + WS-B
+        MOVE WS-B TO WS-A
+        MOVE WS-T TO WS-B
+    END-PERFORM
+    STOP RUN.

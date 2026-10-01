@@ -6,12 +6,19 @@ from django.db import models
 
 from .engine.languages import LANGUAGES
 
-LANGUAGE_CHOICES = [(lang.slug, lang.name) for lang in LANGUAGES]
+# + Scratch 3: его проекты (.sb3) хранятся как обычные сниппеты, но исполняет их браузерный редактор, а не движок
+LANGUAGE_CHOICES = [(lang.slug, lang.name) for lang in LANGUAGES] + [("scratch", "Scratch 3"), ("arduino", "Arduino Uno")]
 _ALPHABET = string.ascii_letters + string.digits
 
 
 def short_id() -> str:
     return "".join(secrets.choice(_ALPHABET) for _ in range(10))
+
+
+class Visibility(models.TextChoices):
+    PUBLIC = "public", "Публичный"        # виден в профиле автора
+    UNLISTED = "unlisted", "По ссылке"    # открывается только по ссылке (так было всегда)
+    PRIVATE = "private", "Приватный"      # только владельцу
 
 
 class Snippet(models.Model):
@@ -35,6 +42,8 @@ class Snippet(models.Model):
                               on_delete=models.CASCADE, related_name="snippets")
     forked_from = models.ForeignKey("self", verbose_name="форк от", null=True, blank=True,
                                     on_delete=models.SET_NULL, related_name="forks")
+    visibility = models.CharField("видимость", max_length=16, choices=Visibility.choices,
+                                  default=Visibility.UNLISTED, db_index=True)
     created_at = models.DateTimeField("создан", auto_now_add=True)
     updated_at = models.DateTimeField("изменён", auto_now=True)
 
@@ -47,17 +56,24 @@ class Snippet(models.Model):
     def __str__(self) -> str:
         return self.title or f"{self.get_language_display()} · {self.id}"
 
+    def visible_to(self, user) -> bool:
+        """Приватный проект видит только владелец; остальные открываются по ссылке."""
+        if self.visibility != Visibility.PRIVATE:
+            return True
+        return user is not None and user.is_authenticated and user.pk == self.owner_id
+
     def summary(self) -> dict:
-        """Карточка для списка «Мои проекты» — без кода."""
+        """Карточка для списков проектов — без кода."""
         return {
             "id": self.id,
             "title": self.title,
             "language": self.language,
+            "visibility": self.visibility,
             "file_count": 1 + len(self.files),
             "views": self.views,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
-            "url": f"/s/{self.id}/",
+            "url": f"/{self.language}/{self.id}/" if self.language in ("scratch", "arduino") else f"/s/{self.id}/",
         }
 
     def to_dict(self, user=None) -> dict:
@@ -150,3 +166,25 @@ class Execution(models.Model):
             "backend": self.backend,
             "truncated": self.truncated,
         }
+
+
+class SocialAccount(models.Model):
+    """Привязка аккаунта к GitHub / Google: по (provider, uid) находим пользователя при входе через OAuth."""
+
+    class Provider(models.TextChoices):
+        GITHUB = "github", "GitHub"
+        GOOGLE = "google", "Google"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_accounts")
+    provider = models.CharField(max_length=16, choices=Provider.choices)
+    uid = models.CharField("id у провайдера", max_length=255)
+    login = models.CharField("логин / почта у провайдера", max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["provider", "uid"], name="unique_social_account")]
+        verbose_name = "внешний аккаунт"
+        verbose_name_plural = "внешние аккаунты"
+
+    def __str__(self) -> str:
+        return f"{self.get_provider_display()}: {self.login or self.uid} -> {self.user}"

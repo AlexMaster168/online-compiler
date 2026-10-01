@@ -32,20 +32,33 @@ def _docker(cfg: dict) -> str:
     return cfg.get("DOCKER_BIN", "docker")
 
 
+_probe_lock = threading.Lock()
+
+
 def daemon_available(cfg: dict, ttl: float = 15.0) -> bool:
-    with _lock:
-        if _daemon_cache["ok"] is not None and time.monotonic() - _daemon_cache["at"] < ttl:
-            return _daemon_cache["ok"]
-    try:
-        ok = subprocess.run(
-            [_docker(cfg), "info", "--format", "{{.ServerVersion}}"],
-            capture_output=True, timeout=5,
-        ).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        ok = False
-    with _lock:
-        _daemon_cache.update(ok=ok, at=time.monotonic())
-    return ok
+    def cached() -> bool | None:
+        with _lock:
+            if _daemon_cache["ok"] is not None and time.monotonic() - _daemon_cache["at"] < ttl:
+                return _daemon_cache["ok"]
+        return None
+
+    if (ok := cached()) is not None:
+        return ok
+    # Single-flight: параллельные запуски ждут одну проверку, а не запускают по `docker info` каждый
+    # (после рестарта Docker Desktop CLI отвечает секундами, и пачка проверок разом упиралась в таймаут)
+    with _probe_lock:
+        if (ok := cached()) is not None:
+            return ok
+        try:
+            ok = subprocess.run(
+                [_docker(cfg), "info", "--format", "{{.ServerVersion}}"],
+                capture_output=True, timeout=15,
+            ).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        with _lock:
+            _daemon_cache.update(ok=ok, at=time.monotonic())
+        return ok
 
 
 _images_cache: dict = {"names": frozenset(), "at": -1e9}
@@ -80,6 +93,21 @@ def image_present(image: str, cfg: dict) -> bool:
         _images_present.add(image)
         return True
     return False
+
+
+def is_own_image(image: str) -> bool:
+    """Образы oc-* собираются у нас из Dockerfile (manage.py build_sandbox), в Docker Hub их нет."""
+    return image.startswith("oc-")
+
+
+def image_hint(lang: Language) -> str:
+    image = lang.docker.image
+    return f"build_sandbox {own_image_target(image)}" if is_own_image(image) else f"pull_images {lang.slug}"
+
+
+def own_image_target(image: str) -> str:
+    """oc-lang-extra:1 -> extra, oc-debug-native:1 -> native."""
+    return image.split(":")[0].removeprefix("oc-lang-").removeprefix("oc-debug-")
 
 
 def is_available(lang: Language, cfg: dict) -> bool:
@@ -135,7 +163,7 @@ def _base_argv(lang: Language, ws: Workspace, name: str, cfg: dict,
         "--hostname", "sandbox",
         "--network", "none",
         "--memory", f"{memory}m", "--memory-swap", f"{memory}m",
-        "--cpus", "1",
+        "--cpus", str(spec.cpus),
         "--pids-limit", "256",
         "--ulimit", "nofile=256:256",
         "--ulimit", "fsize=67108864:67108864",
@@ -300,7 +328,7 @@ def execute(lang: Language, code: str, stdin: str, cfg: dict,
     if not image_present(spec.image, cfg):
         return ExecutionResult(
             Status.UNAVAILABLE, backend=NAME,
-            message=f"Образ {spec.image} не скачан. Выполни: python manage.py pull_images {lang.slug}",
+            message=f"Образ {spec.image} не скачан. Выполни: python manage.py {image_hint(lang)}",
         )
 
     name = f"oc-{uuid.uuid4().hex[:16]}"

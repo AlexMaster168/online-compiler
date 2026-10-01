@@ -23,8 +23,8 @@ class AuthTests(TestCase):
     def test_register_login_logout(self):
         res = post(self.client, "/api/auth/register/", {"username": "Лёха", "password": PASSWORD})
         self.assertEqual(res.status_code, 201, res.content)
-        self.assertEqual(res.json()["user"], {"username": "Лёха"})
-        self.assertEqual(self.client.get("/api/auth/me/").json()["user"], {"username": "Лёха"})
+        self.assertEqual(res.json()["user"]["username"], "Лёха")
+        self.assertEqual(self.client.get("/api/auth/me/").json()["user"]["username"], "Лёха")
 
         post(self.client, "/api/auth/logout/")
         self.assertIsNone(self.client.get("/api/auth/me/").json()["user"])

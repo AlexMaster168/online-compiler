@@ -1,0 +1,41 @@
+*> Бинарный поиск: O(log n). Индексы COBOL с 1 — печатаем с 0, как остальные языки.
+IDENTIFICATION DIVISION.
+PROGRAM-ID. BINARY-SEARCH.
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01 WS-DATA VALUE "01030507091113151719".
+   05 WS-A PIC 99 OCCURS 10 TIMES.
+01 WS-TARGETS VALUE "0704".
+   05 WS-T PIC 99 OCCURS 2 TIMES.
+01 WS-K      PIC 9.
+01 WS-LO     PIC S9(4).
+01 WS-HI     PIC S9(4).
+01 WS-MID    PIC S9(4).
+01 WS-FOUND  PIC S9(4).
+01 WS-OUT1   PIC Z(17)9.
+01 WS-OUT2   PIC Z(17)9.
+PROCEDURE DIVISION.
+    PERFORM VARYING WS-K FROM 1 BY 1 UNTIL WS-K > 2
+        MOVE 1 TO WS-LO
+        MOVE 10 TO WS-HI
+        MOVE 0 TO WS-FOUND
+        PERFORM UNTIL WS-LO > WS-HI OR WS-FOUND > 0
+            COMPUTE WS-MID = (WS-LO + WS-HI) / 2
+            EVALUATE TRUE
+                WHEN WS-A(WS-MID) = WS-T(WS-K)
+                    MOVE WS-MID TO WS-FOUND
+                WHEN WS-A(WS-MID) < WS-T(WS-K)
+                    COMPUTE WS-LO = WS-MID + 1
+                WHEN OTHER
+                    COMPUTE WS-HI = WS-MID - 1
+            END-EVALUATE
+        END-PERFORM
+        MOVE WS-T(WS-K) TO WS-OUT1
+        IF WS-FOUND > 0
+            COMPUTE WS-OUT2 = WS-FOUND - 1
+            DISPLAY "Found " FUNCTION TRIM(WS-OUT1) " at index " FUNCTION TRIM(WS-OUT2)
+        ELSE
+            DISPLAY FUNCTION TRIM(WS-OUT1) " not found"
+        END-IF
+    END-PERFORM
+    STOP RUN.

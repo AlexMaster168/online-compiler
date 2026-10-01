@@ -1,0 +1,56 @@
+*> Дейкстра за O(V^2) на матрице весов 5x5 (0 — нет ребра). Матрица — строка из 5 строк
+*> по 10 символов: по два знака на вес.
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DIJKSTRA.
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01 WS-MATRIX VALUE "0004010000" & "0000000100" & "0002000500" & "0000000003" & "0000000000".
+   05 WS-ROW OCCURS 5 TIMES.
+      10 WS-W PIC 99 OCCURS 5 TIMES.
+01 WS-DIST-TABLE.
+   05 WS-DIST PIC 9(9) OCCURS 5 TIMES.
+01 WS-DONE-TABLE.
+   05 WS-DONE PIC 9 OCCURS 5 TIMES.
+01 WS-INF    PIC 9(9) VALUE 999999999.
+01 WS-STEP   PIC 9.
+01 WS-I      PIC 9.
+01 WS-U      PIC 9.
+01 WS-BEST   PIC 9.
+01 WS-OUT    PIC Z(17)9.
+PROCEDURE DIVISION.
+    PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 5
+        MOVE WS-INF TO WS-DIST(WS-I)
+        MOVE 0 TO WS-DONE(WS-I)
+    END-PERFORM
+    MOVE 0 TO WS-DIST(1)
+    PERFORM VARYING WS-STEP FROM 1 BY 1 UNTIL WS-STEP > 5
+        MOVE 0 TO WS-BEST
+        PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 5
+            IF WS-DONE(WS-I) = 0
+                IF WS-BEST = 0
+                    MOVE WS-I TO WS-BEST
+                ELSE
+                    IF WS-DIST(WS-I) < WS-DIST(WS-BEST)
+                        MOVE WS-I TO WS-BEST
+                    END-IF
+                END-IF
+            END-IF
+        END-PERFORM
+        IF WS-DIST(WS-BEST) = WS-INF
+            EXIT PERFORM
+        END-IF
+        MOVE 1 TO WS-DONE(WS-BEST)
+        PERFORM VARYING WS-U FROM 1 BY 1 UNTIL WS-U > 5
+            IF WS-W(WS-BEST, WS-U) > 0
+               AND WS-DIST(WS-BEST) + WS-W(WS-BEST, WS-U) < WS-DIST(WS-U)
+                COMPUTE WS-DIST(WS-U) = WS-DIST(WS-BEST) + WS-W(WS-BEST, WS-U)
+            END-IF
+        END-PERFORM
+    END-PERFORM
+    DISPLAY "Dijkstra from 0:" WITH NO ADVANCING
+    PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 5
+        MOVE WS-DIST(WS-I) TO WS-OUT
+        DISPLAY " " FUNCTION TRIM(WS-OUT) WITH NO ADVANCING
+    END-PERFORM
+    DISPLAY SPACE
+    STOP RUN.

@@ -6,17 +6,18 @@ from django.core.management.base import BaseCommand, CommandError
 from compiler.engine import docker
 from compiler.engine.languages import LANGUAGES
 
-DEBUG_DIR = docker.SANDBOX_DIR / "debug"
+DOCKERFILE_DIRS = {"oc-debug-": docker.SANDBOX_DIR / "debug", "oc-lang-": docker.SANDBOX_DIR / "lang"}
 
 
 class Command(BaseCommand):
-    help = ("Собирает служебные компоненты Docker-песочницы: хелперы консоли (ptyrun, octcp) "
-            "и образы отладчиков (debugpy, gdb, delve, JDI). Для сборки образов нужна сеть.")
+    help = ("Собирает служебные компоненты Docker-песочницы: хелперы консоли (ptyrun, octcp), "
+            "свои образы языков (oc-lang-*) и образы отладчиков (oc-debug-*). Для сборки образов нужна сеть.")
 
     def add_arguments(self, parser):
         parser.add_argument("targets", nargs="*",
-                            help="что собрать: python native go jvm kotlin; без аргументов — всё")
-        parser.add_argument("--no-debug", action="store_true", help="только хелперы, без образов отладчиков")
+                            help="что собрать: extra jvm native python go arduino esp32 (или lang-jvm, debug-jvm); "
+                                 "без аргументов — всё")
+        parser.add_argument("--no-debug", action="store_true", help="только хелперы, без образов")
 
     def handle(self, *args, **options):
         cfg = settings.EXECUTOR
@@ -33,21 +34,28 @@ class Command(BaseCommand):
         if options["no_debug"]:
             return
 
-        images = {}
+        images: dict[str, list[str]] = {}
         for lang in LANGUAGES:
-            if lang.debug:
-                images.setdefault(lang.debug.image, []).append(lang.slug)
+            for image in (lang.docker.image if lang.docker else None, lang.debug.image if lang.debug else None):
+                if image and docker.is_own_image(image):
+                    images.setdefault(image, [])
+                    if lang.slug not in images[image]:
+                        images[image].append(lang.slug)
         wanted = set(options["targets"])
+        images["oc-lang-arduino:1"] = ["arduino"]
         failed = []
         for image, slugs in images.items():
-            target = image.split(":")[0].removeprefix("oc-debug-")
-            if wanted and target not in wanted:
+            name = image.split(":")[0]
+            prefix = next(p for p in DOCKERFILE_DIRS if name.startswith(p))
+            short = name.removeprefix(prefix)
+            if wanted and not wanted & {short, name.removeprefix("oc-")}:
                 continue
-            dockerfile = DEBUG_DIR / f"{target}.Dockerfile"
+            dockerfile = DOCKERFILE_DIRS[prefix] / f"{short}.Dockerfile"
             if not dockerfile.exists():
                 self.stderr.write(f"   нет {dockerfile.name} — пропускаю")
                 continue
-            self.stdout.write(f"-> {image} (отладка: {', '.join(slugs)}) ... ", ending="")
+            kind = "отладка" if prefix == "oc-debug-" else "языки"
+            self.stdout.write(f"-> {image} ({kind}: {', '.join(slugs)}) ... ", ending="")
             self.stdout.flush()
             proc = subprocess.run(
                 [docker._docker(cfg), "build", "-q", "-f", str(dockerfile), "-t", image, str(docker.SANDBOX_DIR)],
