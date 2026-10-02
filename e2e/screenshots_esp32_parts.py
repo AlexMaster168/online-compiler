@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 from playwright.sync_api import sync_playwright
+from screenshot_resistors import esp32_resistors
 
 base = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:8000'
 out = Path(__file__).resolve().parents[1] / 'docs/screenshots'
@@ -14,12 +15,21 @@ with sync_playwright() as p:
     page.fill('#langSearch', 'esp32')
     page.keyboard.press('Enter')
     page.wait_for_selector('#esp32Hardware .cc-part')
+    esp32_resistors(page)
+    page.screenshot(path=str(out / 'esp32.png'))
+    page.screenshot(path=str(out / 'esp32-circuit.png'))
+    page.screenshot(path=str(out / 'esp32-wifi-source.png'))
+    page.click('#libraryBtn')
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(out / 'esp32-network-examples.png'))
+    page.keyboard.press('Escape')
     page.click('#esp32Hardware .cc-add')
     page.wait_for_timeout(400)
     assert page.locator('.cc-tile[data-type=resistor]').is_visible()
     assert page.locator('.cc-tile[data-type=ultrasonic]').is_visible()
     page.screenshot(path=str(out / 'esp32-palette.png'))
-    page.click('.cc-tile[data-type=resistor]')
+    page.click('#esp32Hardware .cc-add')
+    page.click('.cc-part[data-type=resistor]')
     page.select_option('.cc-inspector [data-prop=ohms]', '330')
     assert '330' in page.locator('.cc-selected').inner_text()
     page.screenshot(path=str(out / 'esp32-resistor.png'))

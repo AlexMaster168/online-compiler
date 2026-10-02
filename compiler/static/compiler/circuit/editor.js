@@ -227,6 +227,9 @@ export class Circuit {
       if (!def) continue;
       const part = this.newPart(raw.type, false);
       part.id = String(raw.id || part.id).slice(0, 40);
+      if (raw.type === 'resistor' && raw.series && typeof raw.series.part === 'string') {
+        part.series = {part: raw.series.part.slice(0, 40), pin: String(raw.series.pin || 'A').slice(0, 10)};
+      }
       part.x = Number(raw.x) || 0; part.y = Number(raw.y) || 0;
       for (const pin of def.pins) {
         const value = raw.pins?.[pin.id];
@@ -250,6 +253,7 @@ export class Circuit {
       version: 1, board: this.board.id,
       parts: this.parts.map(p => ({
         id: p.id, type: p.type, x: Math.round(p.x), y: Math.round(p.y), pins: {...p.pins}, props: {...p.props},
+        ...(p.series ? {series: {...p.series}} : {}),
         state: Object.fromEntries(SAVED_STATE.filter(k => p.state[k] !== undefined).map(k => [k, p.state[k]])),
       })),
     };
@@ -409,7 +413,11 @@ export class Circuit {
         const x1 = bx + boardPin.x, y1 = by + boardPin.y;
         const out = boardPin.side === 'top' ? -70 : 70;
         const selected = this.selected === part ? ' cc-wire-on' : '';
-        paths.push(`<path class="cc-wire${selected}" d="M${x1} ${y1}C${x1} ${y1 + out} ${px} ${py + 60} ${px} ${py}" stroke="${color}"/>`);
+        const resistor = this.parts.find(r => r.type === 'resistor' && r.series?.part === part.id && r.series.pin === pin.id);
+        const route = resistor
+          ? `M${x1} ${y1}C${x1} ${y1 + out} ${resistor.x + 117} ${resistor.y + 65} ${resistor.x + 117} ${resistor.y + 28} M${resistor.x + 3} ${resistor.y + 28}C${resistor.x - 20} ${resistor.y + 28} ${px} ${py + 30} ${px} ${py}`
+          : `M${x1} ${y1}C${x1} ${y1 + out} ${px} ${py + 60} ${px} ${py}`;
+        paths.push(`<path class="cc-wire${selected}" d="${route}" stroke="${color}"/>`);
         dots.push(`<circle cx="${x1}" cy="${y1}" r="4" fill="${color}" stroke="#0008"/>`);
       });
     }

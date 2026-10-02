@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from screenshot_resistors import esp32_resistors
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import BASE, set_code, term_text, wait_until  # noqa: E402
@@ -118,6 +119,7 @@ with sync_playwright() as p:
     # ---------- приборная панель в QEMU ----------
     page.evaluate("d => { OCProject.setFile('diagram.json', d); OCEsp32Hardware.projectLoaded(); }", json.dumps(DIAGRAM))
     page.wait_for_selector("#esp32Hardware .cc-part[data-id=ir]")
+    esp32_resistors(page)
     if page.locator("#esp32Hardware .cc-inspector:not([hidden])").count():
         page.click("#esp32Hardware .cc-inspector [data-act=close]")
     set_code(page, FIRMWARE)

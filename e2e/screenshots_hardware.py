@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from playwright.sync_api import sync_playwright
+from screenshot_resistors import arduino_resistors
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:8001'
 OUT = Path(__file__).resolve().parents[1] / 'docs/screenshots'
@@ -79,6 +80,7 @@ with sync_playwright() as p:
     ]
     for example, name, ready in shots:
         page.select_option('#example', example)
+        arduino_resistors(page)
         page.click('#run')
         page.wait_for_function("document.querySelector('#status').textContent === 'Прошивка работает'", timeout=120000)
         if example == 'analog':
