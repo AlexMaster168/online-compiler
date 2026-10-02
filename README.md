@@ -528,6 +528,21 @@ void app_main(void) {
 ![ESP32: номинал резистора](docs/screenshots/esp32-resistor.png)
 ![ESP32: мобильный вид](docs/screenshots/esp32-mobile.png)
 
+### Примеры схем ESP32
+
+На снимках — подключения деталей и сгенерированные примеры исходников до запуска прошивки.
+У отдельных светодиодов на схемах стоят последовательные резисторы 220 Ом.
+
+| HC-SR04: расстояние | RGB: три канала и три резистора |
+|---|---|
+| ![ESP32 и HC-SR04](docs/screenshots/esp32-example-ultrasonic.png) | ![ESP32 и RGB](docs/screenshots/esp32-example-rgb.png) |
+| LCD по I2C | Серво и потенциометр |
+| ![ESP32 и LCD](docs/screenshots/esp32-example-lcd_i2c.png) | ![ESP32 и серво](docs/screenshots/esp32-example-servo.png) |
+| DHT22 и LCD | Матрица NeoPixel |
+| ![ESP32 и DHT22](docs/screenshots/esp32-example-dht22.png) | ![ESP32 и NeoPixel](docs/screenshots/esp32-example-neopixel.png) |
+
+Съёмка этой галереи: `python e2e/screenshots_esp32_gallery.py http://127.0.0.1:8000`.
+
 Резистор можно добавить на схему и выбрать номинал (100 Ом — 10 кОм).
 Это обозначение, сохраняемое в `diagram.json`: расчёт тока и падения напряжения пока не поддерживается.
 На демонстрационных схемах обычные светодиоды подключены через обозначенные последовательные резисторы 220 Ом;
