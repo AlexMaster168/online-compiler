@@ -62,6 +62,14 @@ BY_ID = {a.id: a for a in ALGORITHMS}
 
 
 @cache
+def version() -> int:
+    """Версия библиотеки для ключей кеша: самое позднее изменение файлов. Считается раз на процесс —
+    код меняется только с деплоем, а после деплоя процесс новый."""
+    paths = [EXPECTED_FILE, *CODE_DIR.rglob("*")]
+    return int(max(p.stat().st_mtime for p in paths if p.exists()))
+
+
+@cache
 def expected() -> dict[str, str]:
     return json.loads(EXPECTED_FILE.read_text(encoding="utf-8"))
 

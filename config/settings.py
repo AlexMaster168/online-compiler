@@ -1,5 +1,6 @@
 """Настройки проекта online-compiler. Всё, что зависит от окружения, берётся из .env."""
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -90,7 +91,30 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+# Кеш: Redis, если задан REDIS_URL (общий для всех воркеров: rate limit, кеш чтений, сессии),
+# иначе память процесса — для разработки и тестов без Redis этого хватает
+# Тесты ходят в Redis только по явному REDIS_TEST_URL (в CI это отдельный сервис): cache.clear() в тестах —
+# это FLUSHDB, и рабочий Redis из .env он бы стёр
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
+REDIS_URL = os.getenv("REDIS_TEST_URL" if TESTING else "REDIS_URL", "")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "oc"),
+            "TIMEOUT": 300,
+            # Redis недоступен — запрос не должен висеть: compiler/cache.py тогда просто работает без кеша
+            "OPTIONS": {"socket_connect_timeout": 1, "socket_timeout": 1},
+        }
+    }
+    # Сессии читаются из Redis, в БД — только запись при изменении
+    SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# Вход/регистрация/сброс пароля: попыток в минуту с одного IP
+AUTH_RATE_LIMIT_PER_MINUTE = int(os.getenv("AUTH_RATE_LIMIT_PER_MINUTE", "20"))
 
 # --- Движок исполнения кода ---
 EXECUTOR = {

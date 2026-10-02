@@ -1,5 +1,8 @@
 [flake8]
 max-line-length = 120
-exclude = .venv,*/migrations/*,staticfiles
+# jdi_probe — ручной зонд отладчика Java, не часть тестов
+exclude = .venv,*/migrations/*,staticfiles,e2e/jdi_probe.py
 per-file-ignores =
     compiler/engine/languages.py:E501
+    # браузерные сценарии: длинные селекторы и компактные таблицы данных
+    e2e/*.py:E501,E231,E127

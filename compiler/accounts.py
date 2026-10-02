@@ -13,7 +13,6 @@ from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
@@ -24,6 +23,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from . import cache as oc_cache
 from .models import Execution, Snippet, Visibility
 from .payload import BadRequest, api, args_field, files_field, json_body, language_field, no_nul, str_field
 
@@ -54,16 +54,8 @@ def login_required_json(view):
 
 def _auth_throttled(request) -> bool:
     """Защита от перебора: попытки входа, регистрации и сброса пароля с одного IP в минуту."""
-    limit = getattr(settings, "AUTH_RATE_LIMIT_PER_MINUTE", 20)
-    if limit <= 0:
-        return False
-    key = f"rl:auth:{request.META.get('REMOTE_ADDR')}"
-    cache.add(key, 0, timeout=60)
-    try:
-        return cache.incr(key) > limit
-    except ValueError:
-        cache.set(key, 1, timeout=60)
-        return False
+    return oc_cache.rate_hit(f"rl:auth:{request.META.get('REMOTE_ADDR')}",
+                             getattr(settings, "AUTH_RATE_LIMIT_PER_MINUTE", 20))
 
 
 def _throttled_response():
@@ -242,9 +234,12 @@ def password_reset_confirm(request):
 # ---------- профиль ----------
 
 def _public_projects(user) -> list[dict]:
-    qs = (Snippet.objects.filter(owner=user, visibility=Visibility.PUBLIC)
-          .annotate(fork_count=Count("forks")).order_by("-updated_at"))
-    return [{**s.summary(), "forks": s.fork_count} for s in qs[:MAX_PROJECTS_LISTED]]
+    """Публичные проекты автора; кешируются, сбрасываются сигналом при сохранении/удалении/форке."""
+    def load():
+        qs = (Snippet.objects.filter(owner=user, visibility=Visibility.PUBLIC)
+              .annotate(fork_count=Count("forks")).order_by("-updated_at"))
+        return [{**s.summary(), "forks": s.fork_count} for s in qs[:MAX_PROJECTS_LISTED]]
+    return oc_cache.cached(oc_cache.profile_key(user.pk), oc_cache.PROFILE_TTL, load)
 
 
 def _profile_user(username: str):
@@ -274,6 +269,25 @@ def profile_page(request, username: str):
 
 
 # ---------- проекты ----------
+
+def snippet_view(request, snippet_id: str) -> dict:
+    """Проект для чтения по ссылке — из кеша. В кеше лежит представление без привязки к пользователю,
+    а «мой ли это проект» и доступ к приватному проверяются здесь, на каждый запрос."""
+    def load():
+        snippet = SNIPPETS.filter(pk=snippet_id).first()
+        if snippet is None:
+            return None
+        return {"data": snippet.to_dict(None), "owner_id": snippet.owner_id, "visibility": snippet.visibility}
+
+    entry = oc_cache.cached(oc_cache.snippet_key(snippet_id), oc_cache.SNIPPET_TTL, load)
+    if entry is None:
+        raise Http404
+    user = request.user
+    is_owner = bool(entry["owner_id"]) and user.is_authenticated and user.pk == entry["owner_id"]
+    if entry["visibility"] == Visibility.PRIVATE and not is_owner:
+        raise Http404
+    return {**entry["data"], "is_owner": is_owner}
+
 
 def visible_snippet_or_404(request, snippet_id: str) -> Snippet:
     """Проект по ссылке; приватный — только владельцу (остальным он «не существует»)."""
@@ -345,9 +359,9 @@ def fork(request, snippet_id: str):
 @api
 def snippet_detail(request, snippet_id: str):
     """GET — любой по ссылке (приватный — только владелец); PATCH и DELETE — только владелец."""
-    snippet = visible_snippet_or_404(request, snippet_id)
     if request.method == "GET":
-        return JsonResponse(snippet.to_dict(request.user))
+        return JsonResponse(snippet_view(request, snippet_id))
+    snippet = visible_snippet_or_404(request, snippet_id)
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Сначала войди в аккаунт"}, status=401)
     if snippet.owner_id != request.user.pk:

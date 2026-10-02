@@ -1,14 +1,116 @@
-/* Visual peripherals consume explicit firmware Serial telemetry, not raw GPIO. */
+/* ESP32 в редакторе: схема с деталями над консолью.
+ * Прошивка (мост oc_hw.c) пишет в Serial «@OC …» — эти строки прячем из консоли и двигаем ими детали;
+ * детали отвечают строками «@IN …» во вход консоли. Схема хранится в проекте файлом diagram.json.
+ * Классический скрипт: модули схемы подгружаются динамически, только когда выбран ESP32. */
 (() => {
-  const panel=document.createElement('section');panel.id='esp32Hardware';panel.hidden=true;
-  const pins=Array.from({length:19},(_,i)=>`<path d="M8 ${10+i*9}h13m88 0h13" stroke="#c9b77c" stroke-width="5"/>`).join('');
-  panel.innerHTML=`<style>#esp32Hardware{padding:12px;background:#111b28;color:#e5edf6;border-bottom:1px solid #334155}#esp32Hardware[hidden]{display:none}.esp-kit{display:flex;gap:18px;align-items:center;flex-wrap:wrap}#esp32Hardware svg{width:110px;height:155px;fill:initial;stroke:initial;stroke-width:initial}.esp-part{text-align:center;font:12px system-ui}#esp32Hardware .esp-part svg{width:90px;height:75px}#espDisplay{background:#123b70;border:7px solid #13764c;color:#b8f7ff;padding:8px;max-width:180px;white-space:pre-wrap;font:12px monospace}#espLed.active{fill:#ff4343;filter:drop-shadow(0 0 7px #ff4343)}</style>
-  <strong>ESP32 DevKit · компоненты</strong><div class="esp-kit">
-  <svg viewBox="0 0 130 200" role="img" aria-label="ESP32 DevKit, антенна, модуль ESP-WROOM-32 и USB"><rect x="17" y="3" width="96" height="190" rx="8" fill="#152c29" stroke="#60948b"/>${pins}<rect x="30" y="15" width="70" height="100" rx="3" fill="#bdc4ca"/><rect x="30" y="15" width="70" height="25" fill="#263b31"/><path d="M35 35V21h12v12h12V21h12v12h12V21h12" fill="none" stroke="#d0b46e" stroke-width="3"/><text x="65" y="64" fill="#26333d" text-anchor="middle" font-size="12">ESPRESSIF</text><text x="65" y="82" fill="#26333d" text-anchor="middle" font-size="9">ESP-WROOM-32</text><rect x="48" y="123" width="34" height="30" fill="#10151e" stroke="#7f8a91"/><rect x="45" y="169" width="40" height="28" rx="3" fill="#b4bec6"/><rect x="51" y="183" width="28" height="12" fill="#17212c"/><circle cx="33" cy="160" r="7" fill="#737e88"/><circle cx="97" cy="160" r="7" fill="#737e88"/></svg>
-  <div class="esp-part"><svg viewBox="0 0 100 80" role="img" aria-label="Светодиод"><path d="M40 48v28m20-28v22" stroke="#bdc5cb" stroke-width="4"/><path id="espLed" d="M30 48V28a20 20 0 0 1 40 0v20z" fill="#69343a" stroke="#e39090"/></svg><div>LED · GPIO2</div></div>
-  <div class="esp-part"><svg viewBox="0 0 100 80" role="img" aria-label="SG90"><rect x="17" y="25" width="66" height="50" rx="5" fill="#2879c8" stroke="#81baf2"/><rect x="22" y="47" width="56" height="15" fill="#eee"/><text x="50" y="58" text-anchor="middle" font-size="10">SG90</text><g id="espHorn"><rect x="18" y="16" width="64" height="12" rx="6" fill="#f1f2eb" stroke="#929ca3"/></g><circle cx="50" cy="22" r="5" fill="#919da7"/></svg><div>Servo · GPIO18 · <span id="espAngle">—</span></div></div>
-  <div class="esp-part"><div id="espDisplay">Ожидание данных</div><div>Дисплей · Serial</div></div><div class="esp-part"><strong>Антенна Wi-Fi</strong><p id="espNetwork">Сеть: ожидает запуска</p><span>В QEMU: OpenETH</span></div></div><small>Визуализация Serial: @OC LED 1, @OC SERVO 90, @OC LCD текст. Прямое управление GPIO здесь не эмулируется.</small>`;
-  document.getElementById('terminalWrap').before(panel);let pending='';
-  const reset=()=>{pending='';document.getElementById('espLed').classList.remove('active');document.getElementById('espAngle').textContent='—';document.getElementById('espHorn').setAttribute('transform','rotate(0 50 22)');document.getElementById('espDisplay').textContent='Ожидание данных';document.getElementById('espNetwork').textContent='Сеть: ожидает запуска';};
-  window.OCEsp32Hardware={select(slug){panel.hidden=slug!=='esp32';reset();},reset,feed(text){pending+=text;const lines=pending.split('\n');pending=lines.pop().slice(-4096);for(const raw of lines){const line=raw.replace(/\r/g,'');if(line.includes('ESP32 HTTP ready:'))document.getElementById('espNetwork').textContent=line.slice(line.indexOf('ESP32 HTTP ready:'));const m=line.match(/^@OC (LED|SERVO|LCD) (.*)$/);if(!m)continue;if(m[1]==='LED')document.getElementById('espLed').classList.toggle('active',m[2]==='1');if(m[1]==='SERVO'&&/^\d{1,3}$/.test(m[2])){const angle=Math.min(180,Number(m[2]));document.getElementById('espAngle').textContent=angle+'°';document.getElementById('espHorn').setAttribute('transform',`rotate(${angle-90} 50 22)`);}if(m[1]==='LCD')document.getElementById('espDisplay').textContent=m[2].slice(0,32);}}};
+  const base = new URL('circuit/', document.currentScript.src).href;
+  const DEFAULT = {parts: [
+    {id: 'led2', type: 'led', x: 200, y: 120, pins: {A: 'GPIO2'}, props: {color: 'blue'}},
+    {id: 'servo18', type: 'servo', x: 290, y: 90, pins: {SIG: 'GPIO18'}, props: {}},
+  ]};
+
+  const panel = document.createElement('section');
+  panel.id = 'esp32Hardware';
+  panel.className = 'esp32-panel';
+  panel.hidden = true;
+  panel.innerHTML = `<div class="esp32-head"><strong>Схема ESP32</strong>
+    <span class="esp32-net" id="espNetwork">Сеть: ожидает запуска</span>
+    <button type="button" class="chip" id="espToggle" aria-expanded="true">Свернуть</button></div>
+    <div id="espCircuit"></div>`;
+  document.getElementById('terminalWrap').before(panel);
+  const css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = `${base}circuit.css`;
+  document.head.appendChild(css);
+
+  let circuit = null, bus = null, loading = null, pending = '', active = false;
+
+  const diagramFromProject = () => {
+    const text = window.OCProject?.getFile('diagram.json');
+    if (!text) return DEFAULT;
+    try { return JSON.parse(text); } catch { return DEFAULT; }
+  };
+
+  function ensure() {
+    loading ||= Promise.all([import(`${base}editor.js`), import(`${base}esp32-bus.js`)]).then(([editor, busModule]) => {
+      circuit = new editor.Circuit(document.getElementById('espCircuit'), {
+        board: 'esp32',
+        onChange: diagram => window.OCProject?.setFile('diagram.json', JSON.stringify(diagram, null, 1)),
+        onExample: code => window.OCProject?.replaceMain(code),
+      });
+      circuit.Bus = busModule.Esp32Bus;
+      circuit.load(diagramFromProject());
+      return circuit;
+    });
+    return loading;
+  }
+
+  document.getElementById('espToggle').addEventListener('click', () => {
+    const box = document.getElementById('espCircuit');
+    box.hidden = !box.hidden;
+    document.getElementById('espToggle').textContent = box.hidden ? 'Развернуть' : 'Свернуть';
+    document.getElementById('espToggle').setAttribute('aria-expanded', String(!box.hidden));
+  });
+
+  /* Служебные строки — в схему, остальное — в консоль. Неполная строка, похожая на «@OC», ждёт продолжения. */
+  function feed(text) {
+    pending += text;
+    let shown = '';
+    let start = 0;
+    for (let i = 0; i < pending.length; i++) {
+      if (pending[i] !== '\n') continue;
+      const raw = pending.slice(start, i + 1);
+      const line = raw.replace(/\r?\n$/, '').replace(/\r/g, '');
+      start = i + 1;
+      if (line.includes('ESP32 HTTP ready:')) document.getElementById('espNetwork').textContent = line.slice(line.indexOf('ESP32 HTTP ready:'));
+      if (line.startsWith('@IN ')) continue;  // эхо нашего ввода
+      if (line.startsWith('@OC ')) { if (bus) bus.line(line); continue; }
+      shown += raw;
+    }
+    const rest = pending.slice(start);
+    // Хвост без перевода строки: если это может быть началом «@OC »/«@IN », придержим его до конца строки
+    const head = rest.slice(0, 4);
+    const maybeService = rest.startsWith('@') && ('@OC '.startsWith(head) || '@IN '.startsWith(head));
+    if (maybeService && rest.length < 4096) {
+      pending = rest;
+    } else {
+      shown += rest;
+      pending = '';
+    }
+    return shown;
+  }
+
+  window.OCEsp32Hardware = {
+    select(slug) {
+      active = slug === 'esp32';
+      panel.hidden = !active;
+      this.reset();
+      if (active) ensure().then(c => c.load(diagramFromProject()));
+    },
+    /* Проект открыт заново (черновик, сниппет, ссылка) — подхватываем его diagram.json */
+    projectLoaded() { if (active && circuit) circuit.load(diagramFromProject()); },
+    start(send) {
+      if (!active) return;
+      const run = c => {
+        bus?.stop();
+        bus = new c.Bus(send);
+        c.run(bus);
+      };
+      // Схема уже загружена — запускаем сразу, чтобы не потерять первые строки телеметрии
+      if (circuit) run(circuit); else ensure().then(run);
+    },
+    stop() {
+      bus?.stop();
+      bus = null;
+      circuit?.stop();
+    },
+    reset() {
+      pending = '';
+      this.stop();
+      document.getElementById('espNetwork').textContent = 'Сеть: ожидает запуска';
+    },
+    feed,
+    /* Расшифровка из истории: без служебных строк */
+    strip(text) { return String(text || '').split('\n').filter(l => !/^@(OC|IN) /.test(l.replace(/\r$/, ''))).join('\n'); },
+  };
 })();

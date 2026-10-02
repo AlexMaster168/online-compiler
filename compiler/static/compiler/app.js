@@ -168,6 +168,7 @@
       if (lines.length) setFileBreakpoints(file, lines);
     }
     openFile(0);
+    window.OCEsp32Hardware?.projectLoaded();
     if (isBlocks()) syncBlocksFromProject();
   }
 
@@ -246,6 +247,32 @@
     scheduleDraftSave();
     return null;
   }
+
+  // Файлы проекта для схемы ESP32: diagram.json и «Вставить пример кода» детали
+  window.OCProject = {
+    getFile(name) {
+      return state.files.find((f) => f.name === name)?.model.getValue() ?? null;
+    },
+    setFile(name, content) {
+      const file = state.files.find((f) => f.name === name);
+      if (file) {
+        if (file.model.getValue() !== content) file.model.setValue(content);
+        return;
+      }
+      if (state.files.length - 1 >= MAX_FILES) return;
+      state.files.push(createFile(name, content));
+      renderTabs();
+      scheduleDraftSave();
+    },
+    replaceMain(code) {
+      const main = state.files[0];
+      if (!main) return;
+      const current = main.model.getValue();
+      if (current.trim() && current !== code && !confirm(`Заменить код в ${main.name} примером для этой детали?`)) return;
+      main.model.setValue(code);
+      openFile(0);
+    },
+  };
 
   function newFile() {
     if (!state.monaco) return;
@@ -780,6 +807,8 @@
     const payload = { language: state.lang.slug, ...projectPayload() };
     if (debug) consoleSend({ type: "debug_start", ...payload, breakpoints: allBreakpoints() });
     else consoleSend({ type: "start", ...payload });
+    // Детали на схеме ESP32 отвечают прошивке строками «@IN …» во вход консоли
+    if (state.lang.slug === "esp32") window.OCEsp32Hardware?.start((line) => consoleSend({ type: "stdin", data: `${line}\n` }));
     term.focus();
   }
 
@@ -808,8 +837,9 @@
         term.write(ANSI.yellow(ev.data));
       } else {
         cons.transcript.out += ev.data;
-        if (state.lang.slug === "esp32") window.OCEsp32Hardware?.feed(ev.data);
-        term.write(ev.stream === "stderr" ? ANSI.red(ev.data) : ev.data);
+        // ESP32: строки «@OC …» двигают детали на схеме и в консоль не попадают
+        const data = state.lang.slug === "esp32" && window.OCEsp32Hardware ? window.OCEsp32Hardware.feed(ev.data) : ev.data;
+        if (data) term.write(ev.stream === "stderr" ? ANSI.red(data) : data);
       }
     } else if (ev.type === "exit") {
       finishConsole(ev);
@@ -835,6 +865,7 @@
   function finishConsole(result) {
     const term = cons.term;
     cons.line = "";
+    window.OCEsp32Hardware?.stop();
     if (dbg.active) endDebugUI();
     term.write((term.buffer.active.cursorX ? "\r\n" : "") + "\r\n" + exitSummary(result) + "\r\n");
     renderMeta({ ...result, stderr: result.stderr || result.stdout });
@@ -849,7 +880,7 @@
     term.reset();
     window.OCEsp32Hardware?.reset();
     if (result.compile_output) term.write(ANSI.yellow(result.compile_output));
-    if (result.stdout) term.write(result.stdout);
+    if (result.stdout) term.write(state.lang.slug === "esp32" && window.OCEsp32Hardware ? window.OCEsp32Hardware.strip(result.stdout) : result.stdout);
     if (result.stderr && result.stderr !== result.stdout) term.write(ANSI.red(result.stderr));
     term.write((term.buffer.active.cursorX ? "\r\n" : "") + "\r\n" + exitSummary(result) + "\r\n");
   }

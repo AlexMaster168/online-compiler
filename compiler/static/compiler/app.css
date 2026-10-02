@@ -59,8 +59,8 @@ body {
   overflow: hidden;
 }
 button { font: inherit; color: inherit; }
-/* Стиль иконок. Чужую графику (Blockly и т.п.) не трогаем — иначе её SVG сжимается до 18px и теряет заливку */
-svg:not(.injectionDiv svg) {
+/* Стиль иконок. Чужую графику (Blockly, схему ESP32) не трогаем — иначе её SVG сжимается до 18px и теряет заливку */
+svg:not(.injectionDiv svg):not(.oc-circuit svg):not(#ocCircuitDefs) {
   width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2;
   stroke-linecap: round; stroke-linejoin: round; flex: none;
 }
@@ -634,6 +634,13 @@ kbd {
   .output-block .seg { padding: 0 7px; white-space: nowrap; }
   .output-block .chip { padding: 0 6px; }
   .output-block .status-badge { padding: 0 6px; }
+  /* Шапка редактора: чипы ужимаются, а вкладка главного файла не схлопывается до «mai» */
+  .editor-pane > .pane-head .chip { padding: 0 5px; }
+  #wrapBtn { display: none; } /* перенос строк — в настройках */
+  .tabs { flex: 1 1 auto; min-width: 84px; }
+  /* Категории блоков узкой колонкой — рабочей области остаётся больше места */
+  .blocks-area .blocklyTreeRow, .blocks-area .blocklyToolboxCategory { padding-right: 4px; }
+  .blocks-area .blocklyTreeLabel, .blocks-area .blocklyToolboxCategoryLabel { font-size: 12px; }
 }
 
 /* ---------- библиотека примеров ---------- */
@@ -715,3 +722,10 @@ body.scratch-page .topbar a { text-decoration: none; color: inherit; }
   color: var(--text); background: var(--bg);
 }
 .scratch-missing pre { padding: 10px 14px; border-radius: 8px; background: var(--panel); font: 14px var(--mono); }
+
+/* ---------- ESP32: схема с деталями над консолью ---------- */
+.esp32-panel { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.esp32-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.esp32-head .chip { margin-left: auto; }
+.esp32-net { color: var(--text-2); font: 12px var(--mono); }
+.esp32-panel .cc-view { max-height: 46vh; }

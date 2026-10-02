@@ -1,29 +1,67 @@
 {% load static %}<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arduino Uno · Online Compiler</title>
+<link rel="stylesheet" href="{% static 'compiler/circuit/circuit.css' %}">
 <style>
-body{margin:0;background:#101522;color:#e4eaf4;font:15px system-ui}header{padding:16px 24px;display:flex;gap:24px;align-items:center;border-bottom:1px solid #334155}a{color:#8bc7ff}main{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px}textarea{box-sizing:border-box;width:100%;height:65vh;background:#171f30;color:#e4eaf4;border:1px solid #334155;padding:16px;font:14px monospace;tab-size:2}button,input,select{font:inherit}button{padding:10px 16px;background:#2563eb;color:white;border:0;border-radius:8px;cursor:pointer}button:disabled{opacity:.5}#board{background:#008b8b;border-radius:18px;padding:30px;margin:20px 0;box-shadow:0 12px 30px #0005}#led{display:inline-block;width:24px;height:24px;border-radius:50%;background:#46382a;margin:0 12px}#led.on{background:#ffd548;box-shadow:0 0 22px #ffd548}pre{white-space:pre-wrap;background:#171f30;padding:14px;max-height:28vh;overflow:auto}label{display:block;margin:20px 0}.actions{display:flex;gap:10px;margin:14px 0}@media(max-width:800px){main{grid-template-columns:1fr}textarea{height:45vh}}
-</style></head><body><header><a href="/">← Компилятор</a><strong>Arduino Uno</strong><span>ATmega328P · 16 MHz</span><a href="/scratch/">Scratch 3</a></header>
-<main><section><label>Скетч <select id="example"><option value="blink">Мигающий LED</option><option value="button">Кнопка</option><option value="analog">Потенциометр</option></select></label><textarea id="code" spellcheck="false" aria-label="Код Arduino"></textarea><div class="actions"><button id="run">Собрать и запустить</button><button id="stop" disabled>Остановить</button><button id="download">Скачать скетч</button></div><p id="status" role="status">Готов к сборке</p><pre id="log"></pre></section>
-<section><div id="board"><h2>UNO</h2><div>LED D13 <span id="led"></span></div><p>D2 → кнопка · A0 → потенциометр</p><button id="button">Кнопка D2 (удерживай)</button><label>Потенциометр A0 <input id="pot" type="range" min="0" max="1023" value="512"></label><div id="clock">0.00 с</div></div><h3>Serial · 9600 baud</h3><pre id="serial" aria-live="polite"></pre><form id="send"><input id="input" aria-label="Ввод Serial" placeholder="Отправить строку"><button>Отправить</button></form><p>Черновик автоматически сохраняется в этом браузере.</p></section></main>
-<script>
-const hardwareStyles = document.createElement('link');
-hardwareStyles.rel = 'stylesheet';
-hardwareStyles.href = "{% static 'compiler/arduino-hardware.css' %}";
-document.head.appendChild(hardwareStyles);
-const extra = document.createElement('div');
-extra.innerHTML = '<label>Сервопривод D9: <span id="servo">0°</span></label><label>LCD 16×2 (RS=12, E=11, D4–D7=5,4,3,2)</label><pre id="lcd">                \n                </pre>';
-document.getElementById('board').appendChild(extra);
-for (const [value, title] of [['servo','Сервопривод'],['lcd','LCD 16×2']]) document.getElementById('example').add(new Option(title,value));
-const saveBar = document.createElement('div');
-saveBar.className = 'actions';
-saveBar.innerHTML = '<input id="title" aria-label="Название проекта" placeholder="Название проекта"><button id="save">Сохранить проект</button><a href="/?login=1&next=/arduino/">Войти в аккаунт</a>';
-{% if user %}
-saveBar.querySelector('a').href = '/';
-saveBar.querySelector('a').textContent = 'Мой аккаунт';
-{% endif %}
-document.getElementById('code').before(saveBar);
-</script>
+:root { --panel: #111b28; --bg-2: #0c1420; --border: #2c3d52; --text: #e4eaf4; --text-2: #94a3b8; --accent: #2563eb; }
+body { margin: 0; background: #101522; color: var(--text); font: 15px system-ui, sans-serif; }
+header { padding: 14px 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; border-bottom: 1px solid #334155; }
+a { color: #8bc7ff; }
+main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; padding: 20px; }
+main > * { min-width: 0; }
+textarea {
+  box-sizing: border-box; width: 100%; height: 52vh; background: #171f30; color: var(--text);
+  border: 1px solid #334155; border-radius: 8px; padding: 14px; font: 14px/1.45 monospace; tab-size: 2; resize: vertical;
+}
+button, input, select { font: inherit; }
+.btn { padding: 9px 14px; background: var(--accent); color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+.btn.ghost { background: #1a2536; border: 1px solid #3c516c; }
+.btn:disabled { opacity: .5; cursor: default; }
+input:not([type=range]), select { background: #1a2536; color: var(--text); border: 1px solid #3c516c; border-radius: 6px; padding: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+.actions input { flex: 1 1 160px; min-width: 0; }
+pre { white-space: pre-wrap; background: #171f30; padding: 12px; border-radius: 8px; margin: 0; max-height: 26vh; overflow: auto; }
+#log:empty { display: none; }
+#status { margin: 8px 0; color: var(--text-2); }
+.serial-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 14px 0 6px; }
+.serial-head h3 { margin: 0; font-size: 15px; }
+#clock { color: var(--text-2); font: 13px monospace; }
+#serial { min-height: 80px; }
+#send { display: flex; gap: 8px; margin-top: 8px; }
+#send input { flex: 1; min-width: 0; }
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; padding: 12px; gap: 12px; }
+  header { padding: 12px 16px; gap: 6px 16px; }
+  textarea { height: 40vh; }
+}
+</style></head>
+<body>
+<header><a href="/">← Компилятор</a><strong>Arduino Uno</strong><span>ATmega328P · 16 MHz</span><a href="/scratch/">Scratch 3</a></header>
+<main>
+  <section>
+    <div class="actions">
+      <input id="title" aria-label="Название проекта" placeholder="Название проекта">
+      <button class="btn" id="save">Сохранить проект</button>
+      {% if user %}<a href="/">Мой аккаунт</a>{% else %}<a href="/?login=1&next=/arduino/">Войти в аккаунт</a>{% endif %}
+    </div>
+    <label>Пример <select id="example"></select></label>
+    <div class="actions">
+      <button class="btn" id="run">Собрать и запустить</button>
+      <button class="btn ghost" id="stop" disabled>Остановить</button>
+      <button class="btn ghost" id="download">Скачать скетч</button>
+    </div>
+    <textarea id="code" spellcheck="false" aria-label="Код Arduino"></textarea>
+    <p id="status" role="status">Готов к сборке</p>
+    <pre id="log"></pre>
+  </section>
+  <section>
+    <div id="circuit" aria-label="Схема"></div>
+    <div class="serial-head"><h3>Serial · 9600 бод</h3><span id="clock">0.00 с</span></div>
+    <pre id="serial" aria-live="polite"></pre>
+    <form id="send"><input id="input" aria-label="Ввод Serial" placeholder="Отправить строку"><button class="btn ghost">Отправить</button></form>
+    <p style="color:var(--text-2);font-size:13px">Код и схема черновика сохраняются в этом браузере; «Сохранить проект» — в аккаунт и по ссылке.</p>
+  </section>
+</main>
 {{ project|json_script:"project-data" }}
-<script src="{% static 'compiler/arduino-hardware.js' %}"></script>
-<script type="module" src="{% static 'compiler/arduino.js' %}"></script></body></html>
+<script type="module" src="{% static 'compiler/arduino.js' %}"></script>
+</body></html>

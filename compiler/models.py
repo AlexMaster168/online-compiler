@@ -6,8 +6,11 @@ from django.db import models
 
 from .engine.languages import LANGUAGES
 
-# + Scratch 3: его проекты (.sb3) хранятся как обычные сниппеты, но исполняет их браузерный редактор, а не движок
-LANGUAGE_CHOICES = [(lang.slug, lang.name) for lang in LANGUAGES] + [("scratch", "Scratch 3"), ("arduino", "Arduino Uno")]
+# + Scratch 3 и Arduino Uno: их проекты хранятся как обычные сниппеты, но исполняют их браузерные
+# редактор и симулятор, а не движок
+LANGUAGE_CHOICES = [(lang.slug, lang.name) for lang in LANGUAGES] + [
+    ("scratch", "Scratch 3"), ("arduino", "Arduino Uno"),
+]
 _ALPHABET = string.ascii_letters + string.digits
 
 

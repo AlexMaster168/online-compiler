@@ -1,4 +1,5 @@
-# Arduino: arduino-cli + ядро arduino:avr (Uno, Nano, Mega) + библиотеки учебного набора.
+# Arduino: arduino-cli + ядро arduino:avr (Uno, Nano, Mega) + библиотеки деталей из палитры схемы
+# (серво, LCD, I2C LCD, OLED, NeoPixel, ИК и радиопульты, шаговик, клавиатура, DHT).
 # Всё ставится при сборке образа: в песочнице сети нет. Кеш ядра прогреваем — иначе каждая компиляция ~15 с.
 FROM debian:trixie-slim
 ENV ARDUINO_DIRECTORIES_DATA=/opt/arduino/data \
@@ -9,7 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
  && wget -qO /tmp/cli.tgz https://github.com/arduino/arduino-cli/releases/download/v1.5.1/arduino-cli_1.5.1_Linux_64bit.tar.gz \
  && tar -xzf /tmp/cli.tgz -C /usr/local/bin arduino-cli && rm /tmp/cli.tgz \
  && arduino-cli core update-index && arduino-cli core install arduino:avr \
- && arduino-cli lib install Servo LiquidCrystal \
+ && arduino-cli lib install Servo LiquidCrystal Stepper Keypad "LiquidCrystal I2C" "IRremote@4.4.1" rc-switch \
+      "Adafruit NeoPixel" "Adafruit SSD1306" "Adafruit GFX Library" "DHT sensor library" "Adafruit Unified Sensor" \
  && rm -rf /opt/arduino/staging /var/lib/apt/lists/* \
  && mkdir -p /tmp/warm/warm \
  && printf 'void setup(){Serial.begin(9600);pinMode(13,OUTPUT);}\nvoid loop(){digitalWrite(13,HIGH);delay(100);}\n' > /tmp/warm/warm/warm.ino \

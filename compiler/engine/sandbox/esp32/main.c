@@ -6,6 +6,7 @@
 #include "esp_eth.h"
 #include "esp_http_server.h"
 #include "esp_mac.h"
+#include "oc_hw.h"  // детали на схеме: oc_write, oc_servo, oc_read …
 
 static esp_err_t home(httpd_req_t *request) {
     httpd_resp_set_type(request, "text/html; charset=utf-8");
@@ -49,11 +50,12 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_netif_attach(netif, esp_eth_new_netif_glue(ethernet)));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, got_ip, NULL));
     ESP_ERROR_CHECK(esp_eth_start(ethernet));
+    // Светодиод на GPIO2 и сервопривод на GPIO18 — добавь их на схему (кнопка «+ Деталь»)
+    oc_output(2);
     for (int counter = 0; ; counter++) {
         printf("ESP32: %d\n", counter);
-        // Serial telemetry drives the browser components (not QEMU GPIO).
-        printf("@OC LED %d\n@OC SERVO %d\n@OC LCD ESP32: %d\n",
-               counter % 2, (counter % 3) * 90, counter);
+        oc_write(2, counter % 2);
+        oc_servo(18, (counter % 3) * 90);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

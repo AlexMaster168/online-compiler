@@ -3,13 +3,15 @@ import re
 import zipfile
 
 from django.conf import settings
+from django.db.models import F
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
+from . import cache as oc_cache
 from . import engine, library
-from .accounts import SNIPPETS, user_dict, visible_snippet_or_404
+from .accounts import SNIPPETS, snippet_view, user_dict, visible_snippet_or_404
 from .oauth import enabled_providers
 from .engine.formatter import FormatError, server_formatter
 from .engine.formatter import format_code as run_formatter
@@ -36,12 +38,12 @@ def index(request, snippet_id: str | None = None, uidb64: str | None = None, tok
     _session_key(request)  # сессия нужна до открытия WebSocket-консоли: по ней пишется история
     snippet = None
     if snippet_id:
-        snippet = visible_snippet_or_404(request, snippet_id)
-        if snippet.language in ("scratch", "arduino"):
-            return redirect(f"/{snippet.language}/{snippet.pk}/")
-        Snippet.objects.filter(pk=snippet.pk).update(views=snippet.views + 1)
+        snippet = snippet_view(request, snippet_id)  # из кеша: ссылки на проекты — самые частые запросы
+        if snippet["language"] in ("scratch", "arduino"):
+            return redirect(f"/{snippet['language']}/{snippet_id}/")
+        Snippet.objects.filter(pk=snippet_id).update(views=F("views") + 1)  # без сигнала: кеш не сбрасывается
     return render(request, "compiler/index.html", {
-        "snippet": snippet.to_dict(request.user) if snippet else None,
+        "snippet": snippet,
         "limits": _limits(),
         "user": user_dict(request.user),
         # Фронтенд сам открывает нужный диалог: «новый пароль» по ссылке из письма, ошибка входа через OAuth
@@ -121,7 +123,9 @@ def library_index(request):
         ]})
     if engine.get_language(slug) is None:
         return JsonResponse({"error": "Неизвестный язык"}, status=400)
-    return JsonResponse({"categories": list(library.CATEGORIES), "items": library.catalog(slug)})
+    items = oc_cache.cached(f"library:{library.version()}:index:{slug}", oc_cache.LIBRARY_TTL,
+                            lambda: library.catalog(slug))
+    return JsonResponse({"categories": list(library.CATEGORIES), "items": items})
 
 
 @require_GET
@@ -133,7 +137,8 @@ def library_item(request, slug: str, algorithm_id: str):
         ).read_text(encoding="utf-8")
         return JsonResponse({"id": algorithm_id, "title": "ESP32 " + algorithm_id,
                              "category": "Микроконтроллеры", "description": "", "language": slug, "code": code})
-    code = library.get_code(slug, algorithm_id)
+    code = oc_cache.cached(f"library:{library.version()}:code:{slug}:{algorithm_id}", oc_cache.LIBRARY_TTL,
+                           lambda: library.get_code(slug, algorithm_id))
     if code is None:
         raise Http404
     algorithm = library.BY_ID[algorithm_id]
@@ -155,7 +160,12 @@ def _limits() -> dict:
 
 @require_GET
 def languages(request):
-    return JsonResponse({"languages": engine.language_catalog(), "limits": _limits()})
+    # Каталог на каждый запрос опрашивает Docker о наличии образов — кешируем ненадолго
+    # В ключе — бэкенд исполнения: при смене docker/local каталог другой (и в тестах настройки подменяются)
+    cfg = settings.EXECUTOR
+    key = f"languages:catalog:{cfg['BACKEND']}:{cfg['DOCKER_BIN']}"
+    catalog = oc_cache.cached(key, oc_cache.LANGUAGES_TTL, engine.language_catalog)
+    return JsonResponse({"languages": catalog, "limits": _limits()})
 
 
 @require_POST

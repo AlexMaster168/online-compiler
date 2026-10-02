@@ -1,4 +1,5 @@
 """Local Arduino toolchain; only compiled firmware is sent to the browser."""
+import json
 import threading
 import uuid
 
@@ -11,11 +12,25 @@ from django.views.decorators.http import require_POST
 from .engine import docker
 from .engine.workspace import Workspace
 from .engine.process import run_limited
-from .payload import api, json_body, no_nul, str_field
+from .payload import BadRequest, api, json_body, no_nul, str_field
 from .accounts import visible_snippet_or_404, user_dict, update_snippet
 from .models import Snippet
 
 BUILD_SLOTS = threading.BoundedSemaphore(2)
+DIAGRAM_MAX_BYTES = 64 * 1024
+
+
+def diagram_files(text: str) -> list[dict]:
+    """Схема с деталями хранится файлом diagram.json рядом со скетчем; пустая строка — схемы нет."""
+    if not text:
+        return []
+    try:
+        diagram = json.loads(text)
+    except ValueError:
+        raise BadRequest("Схема повреждена: это не JSON")
+    if not isinstance(diagram, dict) or not isinstance(diagram.get("parts", []), list):
+        raise BadRequest("Схема повреждена: нет списка деталей")
+    return [{"name": "diagram.json", "content": text}]
 
 
 @ensure_csrf_cookie
@@ -35,6 +50,7 @@ def page(request, snippet_id=None):
 def save(request):
     data = json_body(request)
     code = no_nul(str_field(data, "code", required=True, max_bytes=128 * 1024))
+    files = diagram_files(str_field(data, "diagram", max_bytes=DIAGRAM_MAX_BYTES))
     identifier = str_field(data, "id")
     if identifier:
         project = visible_snippet_or_404(request, identifier)
@@ -42,10 +58,11 @@ def save(request):
             return JsonResponse({"error": "Сохранять этот проект может только владелец"}, status=403)
         update_snippet(project, {"title": str_field(data, "title")})
         project.code = code
-        project.save(update_fields=["code", "updated_at"])
+        project.files = files
+        project.save(update_fields=["code", "files", "updated_at"])
     else:
         project = Snippet.objects.create(
-            language="arduino", code=code, title=str_field(data, "title")[:200],
+            language="arduino", code=code, files=files, title=str_field(data, "title")[:200],
             owner=request.user if request.user.is_authenticated else None,
         )
     return JsonResponse(project.to_dict(request.user), status=200 if identifier else 201)

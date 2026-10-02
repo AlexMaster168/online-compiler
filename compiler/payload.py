@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from functools import wraps
 
 from django.conf import settings
-from django.core.cache import cache
 from django.http import JsonResponse
 
 from . import engine
@@ -147,16 +146,8 @@ def parse_breakpoints(data: dict, req: RunRequest) -> dict[str, list[int]]:
 
 
 def rate_limited(client_ip: str | None, kind: str = "run") -> bool:
-    limit = settings.EXECUTOR["RATE_LIMIT_PER_MINUTE"]
-    if limit <= 0:
-        return False
-    key = f"rl:{kind}:{client_ip}"
-    cache.add(key, 0, timeout=60)
-    try:
-        return cache.incr(key) > limit
-    except ValueError:
-        cache.set(key, 1, timeout=60)
-        return False
+    from .cache import rate_hit  # поздний импорт: cache.py не должен тянуть модели при импорте payload
+    return rate_hit(f"rl:{kind}:{client_ip}", settings.EXECUTOR["RATE_LIMIT_PER_MINUTE"])
 
 
 def save_execution(req: RunRequest, result, *, session_key: str, client_ip: str | None,

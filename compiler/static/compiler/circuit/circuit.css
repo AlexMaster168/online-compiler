@@ -1,0 +1,99 @@
+/* Схема с деталями — общая для страницы Arduino и панели ESP32 в редакторе.
+   Цвета берутся из темы страницы (--panel, --border, --text …), с тёмными значениями по умолчанию. */
+.oc-circuit {
+  --cc-bg: var(--panel, #111b28);
+  --cc-bg2: var(--bg-2, #0c1420);
+  --cc-line: var(--border, #2c3d52);
+  --cc-text: var(--text, #e4eaf4);
+  --cc-muted: var(--text-2, #94a3b8);
+  --cc-accent: var(--accent, #3b82f6);
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  color: var(--cc-text); font: 13px/1.4 system-ui, sans-serif;
+}
+.oc-circuit button, .oc-circuit select, .oc-circuit input { font: inherit; }
+.oc-circuit [hidden] { display: none !important; }
+.oc-circuit svg { fill: initial; stroke: initial; }
+
+.cc-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cc-spacer { flex: 1; }
+.cc-hint { color: var(--cc-muted); font-size: 12px; }
+.cc-add {
+  padding: 7px 12px; border-radius: 8px; border: 0; cursor: pointer;
+  background: var(--cc-accent); color: #fff; font-weight: 600;
+}
+.cc-icon {
+  min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px; cursor: pointer;
+  background: var(--cc-bg); color: var(--cc-text); border: 1px solid var(--cc-line);
+}
+.cc-icon:hover, .cc-tile:hover:not(:disabled) { border-color: var(--cc-accent); }
+
+/* Палитра */
+.cc-palette {
+  max-height: 46vh; overflow: auto; padding: 10px; border-radius: 10px;
+  background: var(--cc-bg); border: 1px solid var(--cc-line);
+}
+.cc-palette h4 { margin: 4px 0 6px; font-size: 12px; color: var(--cc-muted); text-transform: uppercase; letter-spacing: .04em; }
+.cc-palette section + section { margin-top: 8px; }
+.cc-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.cc-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; cursor: pointer;
+  background: var(--cc-bg2); color: var(--cc-text); border: 1px solid var(--cc-line); border-radius: 8px;
+  text-align: center; font-size: 12px; line-height: 1.25;
+}
+.cc-tile svg { width: 100%; height: 58px; }
+.cc-tile em { font-style: normal; font-size: 10px; color: #fbbf24; }
+.cc-tile:disabled { opacity: .45; cursor: not-allowed; }
+.cc-note { margin: 8px 0 0; color: var(--cc-muted); font-size: 12px; }
+
+/* Сцена */
+.cc-view {
+  position: relative; overflow: auto; min-height: 260px; max-height: 70vh; border-radius: 10px;
+  background-color: var(--cc-bg2); border: 1px solid var(--cc-line);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--cc-muted) 25%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px; touch-action: pan-x pan-y;
+}
+.cc-sizer { position: relative; }
+.cc-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.cc-boardart { position: absolute; filter: drop-shadow(0 10px 10px #0006); }
+.cc-boardart svg { display: block; }
+.cc-wires { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.cc-wire { fill: none; stroke-width: 3.5; stroke-linecap: round; opacity: .9; }
+.cc-wire-on { stroke-width: 5; opacity: 1; }
+.cc-pinlabel { font: 9px monospace; fill: var(--cc-muted); text-anchor: middle; }
+.cc-parts { position: absolute; left: 0; top: 0; }
+.cc-part {
+  position: absolute; cursor: grab; touch-action: none; user-select: none; border-radius: 8px; outline: none;
+  filter: drop-shadow(0 6px 5px #0007);
+}
+.cc-part svg { display: block; overflow: visible; }
+.cc-part:focus-visible, .cc-part.cc-selected { outline: 2px dashed var(--cc-accent); outline-offset: 4px; }
+.cc-part:active { cursor: grabbing; }
+.cc-controls { display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.cc-controls label { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; color: var(--cc-text); }
+.cc-controls input[type="range"] { width: 100%; margin: 0; accent-color: var(--cc-accent); cursor: pointer; }
+
+/* Настройки детали */
+.cc-inspector {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px;
+  background: var(--cc-bg); border: 1px solid var(--cc-line);
+}
+.cc-insp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cc-row { display: grid; grid-template-columns: minmax(80px, 34%) 1fr; align-items: center; gap: 8px; margin: 0; }
+.cc-row span { color: var(--cc-muted); }
+.cc-row select {
+  min-width: 0; padding: 6px 8px; border-radius: 6px;
+  background: var(--cc-bg2); color: var(--cc-text); border: 1px solid var(--cc-line);
+}
+.cc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.cc-actions button {
+  padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  background: var(--cc-bg2); color: var(--cc-text); border: 1px solid var(--cc-line);
+}
+.cc-actions .cc-danger { color: #f87171; border-color: #7f1d1d; }
+
+@media (max-width: 600px) {
+  .cc-hint { display: none; }
+  .cc-view { max-height: 60vh; }
+  .cc-tiles { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+  .cc-row { grid-template-columns: 1fr; gap: 2px; }
+}

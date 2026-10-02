@@ -1,0 +1,140 @@
+# Быстрый CI на каждый пуш и PR: линт, Django-тесты (PostgreSQL + Redis + Docker-песочница) и браузерные e2e.
+# Тяжёлое (все 41 язык библиотеки, отладчики, Scratch, Arduino/ESP32) — в nightly.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+  DB_HOST: localhost
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  DB_NAME: online_compiler
+  DJANGO_SECRET_KEY: ci-not-secret
+  PYTHONUNBUFFERED: "1"
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pip install -r requirements-dev.txt
+      - name: flake8
+        run: flake8
+      - name: JS syntax
+        run: for f in compiler/static/compiler/*.js; do node --check "$f" || exit 1; done
+      - name: Migrations are up to date
+        run: python manage.py makemigrations --check --dry-run
+        env:
+          DB_HOST: ""  # makemigrations --check в базу не ходит
+
+  django:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      REDIS_TEST_URL: redis://localhost:6379/1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Docker sandbox (хелперы консоли + образы для тестов)
+        run: |
+          python manage.py build_sandbox --no-debug
+          python manage.py pull_images python c javascript
+          python manage.py build_sandbox debug-python
+      - name: Django tests
+        run: python manage.py test compiler --noinput -v 2
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: django
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      EXECUTOR_BACKEND: docker
+      EXECUTOR_RATE_LIMIT_PER_MINUTE: "1000"
+      AUTH_RATE_LIMIT_PER_MINUTE: "1000"
+      OC_SERVER_LOG: ${{ github.workspace }}/server.log
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - name: Docker sandbox
+        run: |
+          python manage.py build_sandbox --no-debug
+          python manage.py pull_images python c java
+      - name: Start server
+        run: |
+          python manage.py migrate --noinput
+          nohup python manage.py runserver 127.0.0.1:8000 --noreload > server.log 2>&1 &
+          for i in $(seq 60); do curl -sf http://127.0.0.1:8000/api/languages/ > /dev/null && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: UI
+        run: python e2e/test_ui.py
+      - name: Accounts
+        run: python e2e/test_accounts.py
+      - name: Profiles
+        run: python e2e/test_profiles.py http://127.0.0.1:8000 "$OC_SERVER_LOG"
+      - name: Blocks
+        run: python e2e/test_blocks.py
+      - name: ESP32 circuit (без QEMU)
+        run: python e2e/test_esp32_components.py
+      - name: Responsive audit
+        run: python e2e/responsive_audit.py
+      - name: Server log
+        if: always()
+        run: tail -200 server.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e/screenshots/
+          retention-days: 7

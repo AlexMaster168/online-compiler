@@ -66,25 +66,35 @@ with sync_playwright() as p:
     screenshot(page, 'blocks-python.png')
 
     page.goto(BASE + '/arduino/')
-    page.wait_for_function("document.querySelector('#code').value.includes('void setup')")
-    for example, name in [('blink','arduino-led.png'),('servo','arduino-servo.png'),
-                          ('analog','arduino-potentiometer.png'),('lcd','arduino-lcd.png')]:
+    page.wait_for_selector('.cc-part')
+    lit = "(id) => Number(document.querySelector(`.cc-part[data-id='${id}'] [data-r=lit]`)?.getAttribute('opacity')) > 0.9"
+    shots = [
+        ('blink', 'arduino-led.png', f"({lit})('led1')"),
+        ('servo', 'arduino-servo.png', "document.querySelector('.cc-part[data-id=servo1] [data-r=deg]').textContent === '90°'"),
+        ('analog', 'arduino-potentiometer.png', "document.querySelector('#serial').textContent.includes('768')"),
+        ('lcd', 'arduino-lcd.png', "document.querySelector('.cc-part[data-id=lcd1] [data-r=l0]').textContent.includes('Hello')"),
+        ('neopixel', 'arduino-neopixel.png', "document.querySelector('.cc-part[data-id=ring] [data-r=px0]').getAttribute('fill') !== '#2a2a2a'"),
+        ('remote', 'arduino-remote.png', f"({lit})('l1')"),
+        ('weather', 'arduino-weather.png', "(document.querySelector('.cc-part[data-id=oled] [data-r=img]').getAttribute('href') || '').startsWith('data:')"),
+    ]
+    for example, name, ready in shots:
         page.select_option('#example', example)
         page.click('#run')
         page.wait_for_function("document.querySelector('#status').textContent === 'Прошивка работает'", timeout=120000)
-        if example == 'blink':
-            page.wait_for_selector('#led.on', timeout=15000)
-        elif example == 'servo':
-            page.wait_for_function("document.querySelector('#servo').textContent === '90°'", timeout=15000)
-        elif example == 'analog':
-            page.locator('#pot').fill('768')
-            page.locator('#pot').dispatch_event('input')
-            page.wait_for_function("document.querySelector('#serial').textContent.includes('768')", timeout=15000)
-        else:
-            page.wait_for_function("document.querySelector('#lcd').textContent.includes('Hello Arduino!')", timeout=15000)
+        if example == 'analog':
+            page.locator('.cc-part[data-id=pot1] input[type=range]').fill('768')
+        if example == 'remote':
+            page.wait_for_timeout(800)
+            page.click('.cc-part[data-id=ir1] [data-ctl=ir][data-cmd="12"]')
+        page.wait_for_function(ready, timeout=20000)
+        page.evaluate("document.querySelector('.cc-view').scrollTo(0, 0)")  # клик по пульту прокручивает схему
+        page.wait_for_timeout(300)
         screenshot(page, name)
         page.click('#stop')
-    page.set_viewport_size({'width':390,'height':844})
+    page.click('.cc-add')
+    screenshot(page, 'arduino-parts.png')
+    page.click('.cc-add')
+    page.set_viewport_size({'width': 390, 'height': 844})
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     screenshot(page, 'arduino-mobile.png')
     browser.close()

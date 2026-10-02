@@ -1,0 +1,178 @@
+# Тяжёлые проверки: каждый сниппет библиотеки на каждом языке, отладчики, Scratch 3, Arduino и ESP32.
+# Качают и собирают десятки гигабайт образов, поэтому — по ночам и вручную (Actions → Nightly → Run workflow).
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.14"
+  DB_HOST: localhost
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  DB_NAME: online_compiler
+  DJANGO_SECRET_KEY: ci-not-secret
+  EXECUTOR_BACKEND: docker
+  PYTHONUNBUFFERED: "1"
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  library:
+    name: library (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: scripting
+            langs: python sql javascript typescript ruby php perl lua bash
+          - group: native
+            langs: c cpp rust go swift
+          - group: jvm
+            build: lang-jvm
+            langs: java kotlin groovy scala clojure
+          - group: dotnet
+            langs: csharp vbnet fsharp
+          - group: functional
+            langs: haskell elixir erlang r dart julia nim crystal
+          - group: extra
+            build: lang-extra
+            langs: pascal fortran assembly prolog objc ocaml zig d cobol ada commonlisp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements.txt
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Images
+        run: |
+          python manage.py build_sandbox --no-debug
+          python manage.py pull_images ${{ matrix.langs }}
+          if [ -n "${{ matrix.build }}" ]; then python manage.py build_sandbox ${{ matrix.build }}; fi
+      - name: check_library
+        run: python manage.py check_library ${{ matrix.langs }} --jobs 2
+
+  django-full:
+    # Django-тесты, когда собраны все образы отладчиков: включаются пропускаемые в CI тесты DAP
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      REDIS_TEST_URL: redis://localhost:6379/1
+      EXECUTOR_BACKEND: auto
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Images
+        run: |
+          python manage.py build_sandbox debug-python debug-native debug-go debug-jvm
+          python manage.py pull_images python c go elixir
+      - run: python manage.py test compiler --noinput -v 2
+
+  e2e:
+    name: e2e (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: debugger
+            setup: |
+              python manage.py build_sandbox debug-python debug-native debug-go debug-jvm
+              python manage.py pull_images python c cpp go java
+            run: python e2e/test_debugger.py $BASE
+          - suite: tools
+            setup: |
+              python manage.py build_sandbox debug-native
+              python manage.py pull_images python c haskell elixir go
+            run: python e2e/test_tools.py $BASE
+          - suite: library
+            setup: |
+              python manage.py build_sandbox lang-extra
+              python manage.py pull_images python
+            run: python e2e/test_library.py $BASE
+          - suite: scratch
+            setup: python manage.py build_scratch
+            run: python e2e/test_scratch.py $BASE
+          - suite: arduino
+            setup: python manage.py build_sandbox lang-arduino
+            run: python e2e/test_circuit.py $BASE
+          - suite: esp32
+            setup: python manage.py build_sandbox lang-esp32
+            run: |
+              python e2e/test_esp32.py $BASE
+              python e2e/test_esp32_components.py $BASE --qemu
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      BASE: http://127.0.0.1:8000
+      REDIS_URL: redis://localhost:6379/0
+      EXECUTOR_RATE_LIMIT_PER_MINUTE: "1000"
+      AUTH_RATE_LIMIT_PER_MINUTE: "1000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Docker sandbox
+        run: |
+          python manage.py build_sandbox --no-debug
+          ${{ matrix.setup }}
+      - name: Start server
+        run: |
+          python manage.py migrate --noinput
+          nohup python manage.py runserver 127.0.0.1:8000 --noreload > server.log 2>&1 &
+          for i in $(seq 60); do curl -sf $BASE/api/languages/ > /dev/null && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: Run
+        run: ${{ matrix.run }}
+      - name: Server log
+        if: always()
+        run: tail -200 server.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-${{ matrix.suite }}
+          path: |
+            e2e/screenshots/
+            docs/screenshots/
+          retention-days: 7

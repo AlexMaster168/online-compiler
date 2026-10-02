@@ -44,6 +44,20 @@ if errorlevel 1 (
     echo [+] Docker работает
 )
 
+rem --- 4b. Redis (кеш, rate limit, сессии): если REDIS_URL локальный — поднимаем контейнер oc-redis ---
+set "OC_LOCAL_REDIS="
+findstr /b /c:"REDIS_URL=redis://127.0.0.1" .env >nul 2>&1 && set "OC_LOCAL_REDIS=1"
+findstr /b /c:"REDIS_URL=redis://localhost" .env >nul 2>&1 && set "OC_LOCAL_REDIS=1"
+if defined OC_LOCAL_REDIS (
+    docker info >nul 2>&1
+    if errorlevel 1 (
+        echo [!] REDIS_URL задан, но Docker ещё не запущен — пока без кеша, сайт работает и так.
+    ) else (
+        docker start oc-redis >nul 2>&1 || docker run -d --name oc-redis --restart unless-stopped -p 127.0.0.1:6380:6379 redis:7-alpine >nul 2>&1
+        echo [+] Redis: oc-redis на 127.0.0.1:6380
+    )
+)
+
 rem --- 5. База ---
 echo [*] Применяю миграции ...
 "%PY%" manage.py migrate --noinput -v 0 || goto :fail

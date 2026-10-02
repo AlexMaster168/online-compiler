@@ -189,6 +189,9 @@ _DOTNET_ENV = (("DOTNET_CLI_TELEMETRY_OPTOUT", "1"), ("DOTNET_NOLOGO", "1"), ("D
 # Свои образы (manage.py build_sandbox): системные компилируемые языки и JVM-языки без сети
 _EXTRA = "oc-lang-extra:1"
 _JVM_LANGS = "oc-lang-jvm:1"
+# ESP32: проект ESP-IDF; oc_hw.c — мост к схеме (перехват GPIO/LEDC/АЦП линкером, см. main/CMakeLists.txt)
+_ESP32_DIR = Path(__file__).parent / "sandbox/esp32"
+_ESP32_SERVICE = ("CMakeLists.txt", "main/CMakeLists.txt", "main/oc_hw.h", "main/oc_hw.c", "sdkconfig.defaults")
 
 # javac на Windows пишет ошибки в ANSI-кодировке — принудительно UTF-8
 _JAVAC_UTF8 = ("-J-Dfile.encoding=UTF-8", "-J-Dstdout.encoding=UTF-8", "-J-Dstderr.encoding=UTF-8",
@@ -590,13 +593,14 @@ LANGUAGES: tuple[Language, ...] = (
     Language(
         slug="esp32", name="ESP32 · Serial", version="ESP-IDF 5.4 / QEMU", monaco="c",
         filename="main.c", library=False, compile_timeout=600, run_timeout=120,
-        template=(Path(__file__).parent / "sandbox/esp32/main/main.c").read_text(encoding="utf-8"),
-        extra_files=(("CMakeLists.txt", 'cmake_minimum_required(VERSION 3.16)\n'
-                      'include($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(oc_esp32)\n'),
-                     ("main/CMakeLists.txt", 'idf_component_register(SRCS "../main.c" INCLUDE_DIRS ".")\n'),
-                     ("sdkconfig.defaults", 'CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y\nCONFIG_ETH_USE_OPENETH=y\n')),
+        template=(_ESP32_DIR / "main.c").read_text(encoding="utf-8"),
+        # Тот же проект собран в образе по тому же пути /code: копируем готовый build — пересобираются только
+        # main.c и oc_hw.c, а не весь ESP-IDF (минуты вместо 8+)
+        extra_files=tuple((name, (_ESP32_DIR / name).read_text(encoding="utf-8")) for name in _ESP32_SERVICE),
         docker=DockerSpec(image="oc-lang-esp32:1", memory_mb=2048, cpus=2,
-                          compile='. /opt/esp/idf/export.sh >/dev/null && idf.py -B build build && '
+                          compile='[ -d build ] || cp -a /opt/oc/esp32-cache/build build; '
+                                  '[ -f sdkconfig ] || cp -a /opt/oc/esp32-cache/sdkconfig sdkconfig; '
+                                  '. /opt/esp/idf/export.sh >/dev/null && idf.py -B build build && '
                                   '(cd build && esptool.py --chip esp32 merge_bin --fill-flash-size 4MB '
                                   '--output qemu_flash.bin @flash_args)',
                           run="bash -c '. /opt/esp/idf/export.sh >/dev/null && exec qemu-system-xtensa -nographic "
