@@ -9,12 +9,28 @@
 или запускай прошивки микроконтроллеров. Код исполняется нашим сервером и локальными Docker-образами;
 Arduino эмулируется прямо в браузере, ESP32 — в QEMU.
 
-**Навигация:** [быстрый старт](#быстрый-старт) · [первый проект](#первый-проект) ·
-[алгоритмы](#библиотека-алгоритмов) · [Scratch и блоки](#блоки-и-scratch-3) ·
-[Arduino](#arduino-uno) · [ESP32](#esp32-и-сайт-внутри-прошивки) ·
-[аккаунты](#аккаунты-и-сохранение-проектов) · [решение-проблем](#если-что-то-не-запускается)
+## Оглавление
 
-![Интерактивная консоль: программа спрашивает — отвечаешь прямо в терминале](docs/screenshots/console.png)
+- [Возможности](#features)
+- [Быстрый старт](#quick-start)
+- [Редактор и запуск программ](#editor)
+- [Библиотека алгоритмов](#algorithms)
+- [Отладчик](#debugger)
+- [Аккаунты и сохранение проектов](#accounts)
+- [Блоки и Scratch 3](#blocks-scratch)
+- [Arduino Uno](#arduino)
+- [ESP32](#esp32)
+- [Архитектура движка](#architecture)
+- [Настройки окружения](#configuration)
+- [API](#api-reference)
+- [Тесты и GitHub Actions](#testing)
+- [Обновление скриншотов](#screenshots)
+- [Решение проблем](#troubleshooting)
+- [Развёртывание](#deployment)
+
+<a id="features"></a>
+
+## Возможности
 
 - **41 язык**: Python, JavaScript, TypeScript, C, C++, Java, C#, Go, Rust, Kotlin, Ruby, PHP, Perl, Lua, Bash, Haskell,
   Swift, R, Dart, Elixir, SQL (SQLite), Pascal, Fortran, Assembly (NASM x86-64), Prolog, Visual Basic .NET, Objective-C,
@@ -42,31 +58,7 @@ Arduino эмулируется прямо в браузере, ESP32 — в QEMU
   устройств. Без аккаунта всё работает как раньше: `Ctrl+S` даёт анонимную неизменяемую ссылку
 - Горячие клавиши: `Ctrl+Enter` — запуск / стоп, `Ctrl+S` — сохранить / поделиться, `Shift+Alt+F` — форматировать
 
-## Скриншоты
-
-**Отладчик** — брейкпоинт в цикле, стек вызовов, локальные переменные и watch-выражение (C через gdbserver + GDB DAP):
-
-![Отладчик](docs/screenshots/debugger.png)
-
-**Мультифайловый проект и ошибки в коде** — ошибка компилятора подчёркнута прямо в строке, `main.cpp:6:49` в выводе
-кликабельна; светлая тема и режим «Stdin заранее»:
-
-![Мультифайловый проект, ошибка компиляции, светлая тема](docs/screenshots/light-multifile.png)
-
-**Beautify, аргументы командной строки и Vim** — Rust отформатирован `rustfmt`, аргументы ушли в `std::env::args()`,
-внизу строка режима Vim:
-
-![Beautify, аргументы, Vim](docs/screenshots/format-args-vim.png)
-
-**«Мои проекты»** — проект в шапке, поиск по своим проектам:
-
-![Мои проекты](docs/screenshots/projects.png)
-
-| Настройки редактора | Телефон |
-|---|---|
-| ![Настройки](docs/screenshots/settings.png) | <img src="docs/screenshots/mobile.png" alt="Мобильная вёрстка" width="260"> |
-
-Скриншоты снимаются автоматически: `python e2e\screenshots.py` (нужны запущенный сервер, Docker и `build_sandbox`).
+<a id="quick-start"></a>
 
 ## Быстрый старт
 
@@ -111,7 +103,9 @@ Blockly загружается в браузер при выборе **Блок�
 | Arduino Uno | меню языков → **Arduino Uno**, `/arduino/` | AVR8js, прошивка ATmega328P |
 | ESP32 | меню языков → **ESP32 · Serial** | ESP-IDF + QEMU в Docker |
 
-## Первый проект
+<a id="editor"></a>
+
+## Редактор и запуск программ
 
 1. Выбери язык. В редакторе появится готовый стартовый пример.
 2. Нажми **Запустить** или `Ctrl+Enter`.
@@ -122,6 +116,32 @@ Blockly загружается в браузер при выборе **Блок�
 **Примеры** заменяют текущий проект выбранным алгоритмом. Если уже есть свой код,
 редактор запросит подтверждение замены — сначала сохрани нужную версию.
 Аргументы запуска задаются отдельной строкой: например, `--count 5 "два слова"`.
+
+### Консоль и ввод данных
+
+![Интерактивная консоль](docs/screenshots/console.png)
+
+### Несколько файлов и диагностика
+
+Вкладки объединяют исходники в проект. Ошибки компилятора подчёркнуты в коде,
+а ссылки на строки в выводе открывают нужный файл.
+
+![Мультифайловый проект и ошибка компиляции](docs/screenshots/light-multifile.png)
+
+### Форматирование и аргументы запуска
+
+`Shift+Alt+F` форматирует код; аргументы задаются над консолью.
+На снимке — Rust, аргументы `std::env::args()` и режим Vim.
+
+![Форматирование, аргументы и Vim](docs/screenshots/format-args-vim.png)
+
+### Настройки редактора и телефон
+
+| Настройки | Мобильный редактор |
+|---|---|
+| ![Настройки редактора](docs/screenshots/settings.png) | <img src="docs/screenshots/mobile.png" alt="Редактор на телефоне" width="260"> |
+
+<a id="algorithms"></a>
 
 ## Библиотека алгоритмов
 
@@ -146,78 +166,21 @@ Blockly загружается в браузер при выборе **Блок�
 В режиме ESP32 кнопка **Примеры** предлагает HTTP-сервер для эмулятора
 и отдельный Wi-Fi пример для физической платы. Blockly и Scratch используют свои блоки.
 
-## Как устроен движок (`compiler/engine/`)
+### Алгоритм на разных языках
 
-| Файл | Что делает |
+Один бинарный поиск запущен на шести языках; на снимках видны исходники и результат.
+
+| Python | C++ |
 |---|---|
-| `languages.py` | Реестр языков: имя файла, шаблон, команды сборки/запуска для Docker и для хоста |
-| `docker.py` | Песочница: одноразовый контейнер на запуск |
-| `local.py` | Запуск тулчейнами хоста (для разработки) |
-| `process.py` | Процесс с лимитами: время, память, вывод, число процессов |
-| `__init__.py` | Выбор бэкенда, валидация, ограничение параллельных запусков |
-| `sandbox/lang/*.Dockerfile` | Свои образы языков: `extra` (Pascal, Fortran, NASM, Prolog, COBOL, Ada, Objective-C, Lisp, OCaml, D, Zig), `jvm` (Scala, Clojure) |
+| ![Python](docs/screenshots/snippet-python.png) | ![C++](docs/screenshots/snippet-cpp.png) |
+| Java | Go |
+| ![Java](docs/screenshots/snippet-java.png) | ![Go](docs/screenshots/snippet-go.png) |
+| Rust | SQL |
+| ![Rust](docs/screenshots/snippet-rust.png) | ![SQL](docs/screenshots/snippet-sql.png) |
 
-Библиотека алгоритмов — `compiler/library/`: код в `code/<язык>/<задача>.<расширение>`, эталонные выводы — в
-`expected.json`, один на все языки. `manage.py check_library [языки] [--algo задача]` запускает сниппеты в песочнице
-и сверяет вывод (у SQL — ячейки результата, а не рамки таблицы).
+![Библиотека сниппетов](docs/screenshots/snippets-library.png)
 
-**Docker-бэкенд** (`EXECUTOR_BACKEND=docker`, или `auto`, если демон запущен): `--network none`, read-only rootfs,
-`--cap-drop ALL`, `no-new-privileges`, пользователь `nobody`, лимиты памяти/CPU/pids/файлов, `timeout -s KILL`
-внутри контейнера. Время и пиковая память замеряются внутри контейнера, без учёта старта Docker.
-
-**Локальный бэкенд** (`EXECUTOR_BACKEND=local`, или `auto`, если образа нет, а тулчейн есть): на Windows процесс
-стартует приостановленным и попадает в Job Object (лимит памяти, лимит процессов, убийство всего дерева), на Linux —
-через rlimit и группу процессов. **Это не песочница**: у кода есть доступ к файлам и сети хоста. Для публичного
-доступа используй только `EXECUTOR_BACKEND=docker`.
-
-Новый язык добавляется одной записью `Language(...)` в `languages.py`.
-
-## Настройки (`.env`)
-
-| Переменная | По умолчанию | |
-|---|---|---|
-| `EXECUTOR_BACKEND` | `auto` | `auto` / `docker` / `local` |
-| `EXECUTOR_RUN_TIMEOUT` | `10` | секунды на выполнение |
-| `EXECUTOR_COMPILE_TIMEOUT` | `30` | секунды на компиляцию |
-| `EXECUTOR_MEMORY_MB` | `512` | лимит памяти (у JVM/.NET/GHC в Docker свой, выше) |
-| `EXECUTOR_MAX_CONCURRENT` | `4` | одновременных запусков на процесс |
-| `EXECUTOR_RATE_LIMIT_PER_MINUTE` | `30` | запусков с одного IP в минуту, `0` — без лимита |
-| `EXECUTOR_INTERACTIVE_TIMEOUT` | `300` | сколько живёт сессия консоли (ожидание ввода не тратит CPU-лимит) |
-| `EXECUTOR_MAX_INTERACTIVE_SESSIONS` | `8` | одновременных сессий консоли |
-| `AUTH_RATE_LIMIT_PER_MINUTE` | `20` | попыток входа / регистрации / сброса пароля с одного IP в минуту |
-| `REDIS_URL` | пусто | кеш и сессии в Redis, например `redis://127.0.0.1:6380/0`; пусто — кеш в памяти процесса |
-| `CACHE_KEY_PREFIX` | `oc` | префикс ключей, если Redis общий с другими проектами |
-
-### Redis
-
-Redis кеширует чтения, которые дёргаются чаще всего: каталог языков (15 с — в нём статус Docker), библиотеку
-алгоритмов (ключ включает версию файлов, так что после деплоя кеш новый сам), открытие проекта по ссылке и
-публичные проекты в профиле. Сохранение, форк и удаление проекта сбрасывают его кеш сигналами (`compiler/signals.py`).
-Там же живут счётчики rate limit (общие для всех воркеров) и сессии (`cached_db`).
-
-`start.bat` сам поднимает контейнер `oc-redis` на порту **6380** (6379 часто занят чужим Redis/Memurai).
-Если Redis упал, сайт работает дальше: кеш пропускается, лимиты не применяются, в лог раз в минуту пишется WARNING.
-
-## API
-
-| Метод | URL | |
-|---|---|---|
-| GET | `/api/languages/` | языки и их доступность |
-| POST | `/api/run/` | `{language, code, files, stdin, args}` → `{status, stdout, stderr, compile_output, time_ms, memory_kb, exit_code, ...}` |
-| POST | `/api/snippets/` | сохранить проект, вернуть короткую ссылку (залогиненному — в «Мои проекты») |
-| GET | `/api/snippets/<id>/`, `/s/<id>/raw/` | получить проект |
-| PATCH, DELETE | `/api/snippets/<id>/` | сохранить на месте / переименовать (`{title}`) / удалить — только владелец |
-| POST | `/api/snippets/<id>/fork/` | форк в свои проекты |
-| GET | `/api/projects/?q=` | «Мои проекты» |
-| POST | `/api/auth/register/`, `/api/auth/login/`, `/api/auth/logout/`; GET `/api/auth/me/` | аккаунт (`{username, password}`) |
-| GET | `/api/history/`, `/api/executions/<id>/` | история текущей сессии |
-| POST | `/api/format/` | `{language, code}` → `{code}` — только Rust и Elixir, остальные форматируются в браузере |
-| POST | `/api/zip/` | `{language, code, files}` → архив проекта; для сниппета — GET `/s/<id>/zip/` |
-
-WebSocket `/ws/run/` — консоль: `{"type": "start", language, code, files}`, затем `stdin` / `eof` / `interrupt` / `kill`;
-сервер шлёт `phase`, `output` (`compile` / `stdout` / `stderr`) и `exit`.
-
-Статусы: `ok`, `stopped`, `compile_error`, `runtime_error`, `timeout`, `memory_limit`, `output_limit`, `unavailable`, `internal_error`.
+<a id="debugger"></a>
 
 ## Отладчик
 
@@ -237,37 +200,45 @@ WebSocket `/ws/run/` — консоль: `{"type": "start", language, code, file
 DAP идёт через `docker exec`, сеть контейнеру по-прежнему не нужна. Образы отладчиков собирает
 `manage.py build_sandbox` (несколько ГБ, нужна сеть на время сборки; выборочно: `build_sandbox python native go jvm`).
 
-## Тесты
+### Остановка на брейкпоинте
 
-```powershell
-.\.venv\Scripts\python manage.py test compiler      # движок, API, консоль, отладчик (без Docker часть пропустится)
-python e2e\test_ui.py                                # браузер: запуск, консоль, мультифайл, история (нужен сервер)
-python e2e\test_debugger.py                          # браузер: отладка Python / C / Java
-python e2e\test_tools.py                             # браузер: аргументы, Beautify, zip, настройки, Vim / Emacs
-python e2e\test_accounts.py                          # браузер: регистрация, сохранение, форк, «Мои проекты»
-python e2e\test_library.py                           # браузер: «Примеры», подсветка и запуск новых языков
-python e2e\test_blocks.py                            # Blockly → Python
-python e2e\test_scratch.py                           # Scratch: сцена, .sb3, сохранение и форки
-python e2e\test_circuit.py                           # Arduino: все примеры, детали ↔ прошивка, палитра, сохранение схемы
-python e2e\test_esp32.py                             # прошивка ESP32, IP и веб-сайт
-python e2e\test_esp32_components.py --qemu          # схема ESP32: GPIO/LEDC/АЦП через мост oc_hw.c
-.\.venv\Scripts\python manage.py check_library      # все 615 сниппетов против эталона (~30 мин)
-```
+На снимке — C, стек вызовов, локальные переменные и watch-выражение.
 
-В `manage.py test` библиотека проверяется на шести языках разных типов (интерпретатор, компилятор, JVM, .NET,
-свой образ, SQL), а шаблон каждого из 41 языка запускается целиком; полный прогон сниппетов — `OC_LIBRARY_FULL=1`.
+![Отладчик C](docs/screenshots/debugger.png)
 
-Тесты кеша на настоящем Redis включаются переменной `REDIS_TEST_URL` (отдельная база: тесты делают `FLUSHDB`,
-поэтому `REDIS_URL` они не трогают никогда).
+<a id="accounts"></a>
 
-### GitHub Actions
+## Аккаунты и сохранение проектов
 
-- **CI** (`.github/workflows/ci.yml`, каждый пуш и PR): flake8, `node --check` для JS, `makemigrations --check`;
-  `manage.py test` на PostgreSQL 18 + Redis 7 с Docker-песочницей; браузерные e2e (UI, аккаунты, профили, блоки,
-  аудит адаптивки) на Playwright. Скриншоты e2e — в артефактах запуска.
-- **Nightly** (`.github/workflows/nightly.yml`, каждую ночь и вручную через *Run workflow*): `check_library` всех
-  615 сниппетов матрицей по группам языков, полный `manage.py test` с образами отладчиков, e2e отладчика,
-  инструментов, библиотеки, Scratch 3, Arduino и ESP32. Им нужны десятки гигабайт образов, поэтому не на каждый пуш.
+Регистрация и вход находятся в верхней панели основного редактора.
+Почту можно указать при регистрации или добавить в настройках аккаунта для восстановления пароля.
+
+| Действие | Без аккаунта | В аккаунте |
+|---|---|---|
+| Запуск программ, блоков и симуляторов | доступен | доступен |
+| Сохранение | анонимная неизменяемая ссылка | собственный проект в «Моих проектах» |
+| Повторное сохранение | новая копия по ссылке | обновление своего проекта с прежним адресом |
+| Чужой проект | просмотр по доступной ссылке | можно сделать форк |
+| История запусков | текущая сессия браузера | привязана к пользователю |
+
+В основном редакторе `Ctrl+S` сохраняет проект. В Scratch работает верхняя кнопка и `Ctrl+S`;
+в Arduino используй **Сохранить проект**. Ссылки Scratch имеют вид `/scratch/<id>/`, Arduino — `/arduino/<id>/`.
+Все эти типы проектов появляются в общем списке аккаунта.
+
+**Видимость:** публичный проект показывается в профиле `/u/<имя>/`, проект «по ссылке» не попадает в публичный список,
+приватный доступен только владельцу. Права на чтение проверяются и в API.
+
+Регистрация поддерживает email, восстановление пароля, публичные профили и видимость проектов.
+Для GitHub/Google OAuth заполни ключи провайдеров из `.env.example`; для отправки писем настрой SMTP.
+Без SMTP ссылка восстановления выводится в консоль сервера.
+
+### Мои проекты
+
+Список поддерживает поиск, переименование и открытие сохранённого проекта.
+
+![Мои проекты](docs/screenshots/projects.png)
+
+<a id="blocks-scratch"></a>
 
 ## Блоки и Scratch 3
 
@@ -305,6 +276,8 @@ python e2e\test_esp32_components.py --qemu          # схема ESP32: GPIO/LED
 При сохранении проекта сохраняются и исходные блоки, и Python-код.
 
 ![Blockly: блоки, Python и результат в консоли](docs/screenshots/blocks-python.png)
+
+<a id="arduino"></a>
 
 ## Arduino Uno
 
@@ -348,25 +321,38 @@ Adafruit NeoPixel, Adafruit SSD1306 + GFX, DHT sensor library. Время на �
 | Парктроник | HC-SR04 + пищалка: чем ближе, тем чаще пищит |
 | Метеостанция | DHT22 + OLED по I2C |
 
+### Галерея Arduino Uno
+
 ![Arduino Uno: палитра деталей](docs/screenshots/arduino-parts.png)
 
 | Мигалка и Serial | Сервопривод |
 |---|---|
 | ![Мигающий светодиод](docs/screenshots/arduino-led.png) | ![Сервопривод](docs/screenshots/arduino-servo.png) |
-| **NeoPixel** | **ИК-пульт** |
-| ![Кольцо NeoPixel](docs/screenshots/arduino-neopixel.png) | ![ИК-пульт](docs/screenshots/arduino-remote.png) |
-| **Метеостанция: DHT22 + OLED** | **LCD 16×2** |
-| ![DHT22 и OLED](docs/screenshots/arduino-weather.png) | ![LCD](docs/screenshots/arduino-lcd.png) |
+| **Потенциометр и яркость** | **ИК-пульт** |
+| ![Потенциометр](docs/screenshots/arduino-potentiometer.png) | ![ИК-пульт](docs/screenshots/arduino-remote.png) |
+| **NeoPixel** | **Метеостанция: DHT22 + OLED** |
+| ![Кольцо NeoPixel](docs/screenshots/arduino-neopixel.png) | ![DHT22 и OLED](docs/screenshots/arduino-weather.png) |
+
+**LCD 16×2:**
+
+![LCD](docs/screenshots/arduino-lcd.png)
 
 <img src="docs/screenshots/arduino-mobile.png" alt="Arduino Uno на телефоне" width="340">
 
-## ESP32 и сайт внутри прошивки
+<a id="esp32"></a>
+
+## ESP32
 
 **ESP32 · Serial** использует собственный образ ESP-IDF 5.4 и QEMU Espressif.
 Сборщик: `python manage.py build_sandbox esp32`. Первая сборка образа скачивает несколько ГБ.
-Выбирай интерактивную консоль. Шаблон запускает HTTP-сервер внутри прошивки;
-после получения IP в Serial нажми **Открыть сайт ESP32**. Страница существует, пока работает сессия.
 ESP-IDF уже собран в образе: при запуске пересобираются только твои файлы (около двух минут).
+
+### Статус проверки и ограничения
+
+Последняя локальная проверка (02.10.2026): интерфейс схемы и сохранение проектов проходят тесты.
+При повторной съёмке демонстрационной прошивки QEMU остановился на строке `Multicore bootloader`
+и завершился по лимиту CPU. Скриншоты палитры, настроек и мобильного вида обновлены;
+новая работающая демонстрация прошивки пока не подтверждена.
 
 ### Запуск веб-сервера
 
@@ -384,7 +370,7 @@ ESP-IDF уже собран в образе: при запуске пересо�
 По текущей конфигурации на компиляцию ESP32 выделено до 600 секунд, контейнеру — 2 ГБ памяти и 2 CPU.
 Исполнение ограничено общими лимитами консоли и 120 секундами CPU-времени.
 
-![ESP32 в интерактивной консоли](docs/screenshots/esp32.png)
+![Редактор ESP32 и схема](docs/screenshots/esp32.png)
 ![Сайт, отдаваемый прошивкой ESP32](docs/screenshots/esp32-website.png)
 
 QEMU поддерживает виртуальный Ethernet OpenETH, но не Wi-Fi радио ESP32:
@@ -407,87 +393,7 @@ HTTP передаётся через локальный мост в сессию
 замени `YOUR_SSID` и `YOUR_PASSWORD` своими данными и используй обычный процесс сборки/прошивки ESP-IDF.
 В QEMU этот вариант не подключится к беспроводной сети.
 
-## Аккаунты и сохранение проектов
-
-Регистрация и вход находятся в верхней панели основного редактора.
-Почту можно указать при регистрации или добавить в настройках аккаунта для восстановления пароля.
-
-| Действие | Без аккаунта | В аккаунте |
-|---|---|---|
-| Запуск программ, блоков и симуляторов | доступен | доступен |
-| Сохранение | анонимная неизменяемая ссылка | собственный проект в «Моих проектах» |
-| Повторное сохранение | новая копия по ссылке | обновление своего проекта с прежним адресом |
-| Чужой проект | просмотр по доступной ссылке | можно сделать форк |
-| История запусков | текущая сессия браузера | привязана к пользователю |
-
-В основном редакторе `Ctrl+S` сохраняет проект. В Scratch работает верхняя кнопка и `Ctrl+S`;
-в Arduino используй **Сохранить проект**. Ссылки Scratch имеют вид `/scratch/<id>/`, Arduino — `/arduino/<id>/`.
-Все эти типы проектов появляются в общем списке аккаунта.
-
-**Видимость:** публичный проект показывается в профиле `/u/<имя>/`, проект «по ссылке» не попадает в публичный список,
-приватный доступен только владельцу. Права на чтение проверяются и в API.
-
-Регистрация поддерживает email, восстановление пароля, публичные профили и видимость проектов.
-Для GitHub/Google OAuth заполни ключи провайдеров из `.env.example`; для отправки писем настрой SMTP.
-Без SMTP ссылка восстановления выводится в консоль сервера.
-
-## Скриншоты и их обновление
-
-Новые изображения лежат в `docs/screenshots/`. Это снимки работающего интерфейса и прошивок, а не макеты.
-Для повторной съёмки установи Playwright в окружение, где запускаешь команды:
-
-```powershell
-python -m pip install -r requirements-dev.txt
-python -m playwright install chromium
-python e2e\screenshots_hardware.py http://127.0.0.1:8000  # Scratch, костюмы, Blockly, схема Uno с деталями
-python e2e\test_esp32.py http://127.0.0.1:8000            # сборка ESP32, сайт и скриншоты
-python e2e\test_circuit.py http://127.0.0.1:8000          # схема Arduino, в т.ч. на телефоне
-```
-
-Перед съёмкой запусти Django, PostgreSQL и Docker; собери Scratch и соответствующие образы плат.
-Для основного редактора, отладчика и аккаунтов есть отдельный `e2e/screenshots.py`.
-
-## Если что-то не запускается
-
-| Что видно | Что проверить |
-|---|---|
-| Scratch предлагает команду сборки | выполни `manage.py build_scratch`, затем обнови страницу |
-| Arduino сообщает, что сборщик недоступен | запусти Docker Desktop и `manage.py build_sandbox arduino` |
-| Язык в меню недоступен | посмотри `manage.py engine_status`; скачай официальный образ или собери свой через `build_sandbox` |
-| ESP32 долго пишет строки компиляции | дождись сборки ESP-IDF; не останавливай сессию до сообщения о запуске |
-| Сайт ESP32 ещё не готов | дождись `ESP32 HTTP ready` и обнови страницу сайта |
-| Ссылка ESP32 сообщает о завершённой сессии | снова запусти прошивку и открой новую ссылку из редактора |
-| Письмо восстановления не пришло | без SMTP оно выводится в консоль; для реальной отправки настрой `EMAIL_HOST` и учётные данные |
-| Браузер не соединяется с консолью | используй ASGI-сервер и разреши WebSocket в прокси |
-
-В публичной установке предварительно собери редактор и образы: посетителю нужны готовые режимы,
-а не доступ к командам администратора сервера.
-
-## Прод
-
-`DJANGO_DEBUG=false`, свой `DJANGO_SECRET_KEY` и `DJANGO_ALLOWED_HOSTS`, `manage.py collectstatic`,
-ASGI-сервер (`daphne config.asgi:application` — нужен для WebSocket-консоли), `EXECUTOR_BACKEND=docker`, `REDIS_URL`
-(без Redis rate limit и кеш у каждого воркера свои).
-
-К базе — через пул psycopg (`DB_POOL_SIZE`, по умолчанию 10) с `CONN_MAX_AGE = 0`: под ASGI «постоянные» соединения
-утекают по одному на поток, пока PostgreSQL не упрётся в `max_connections`. Не включай `CONN_MAX_AGE` обратно.
-
-
-## Примеры алгоритмов на разных языках
-
-Один бинарный поиск запущен на шести языках; на снимках видны исходники и результат.
-
-| Python | C++ |
-|---|---|
-| ![Python](docs/screenshots/snippet-python.png) | ![C++](docs/screenshots/snippet-cpp.png) |
-| Java | Go |
-| ![Java](docs/screenshots/snippet-java.png) | ![Go](docs/screenshots/snippet-go.png) |
-| Rust | SQL |
-| ![Rust](docs/screenshots/snippet-rust.png) | ![SQL](docs/screenshots/snippet-sql.png) |
-
-![Библиотека сниппетов](docs/screenshots/snippets-library.png)
-
-## Схема ESP32
+### Компоненты и мост к прошивке
 
 У ESP32 в редакторе над консолью та же схема с деталями (плата DevKit, ножки GPIO). QEMU не выводит ножки
 наружу, поэтому к каждому проекту добавляется мост `main/oc_hw.c`: линкер (`ld --wrap`) подменяет
@@ -522,13 +428,15 @@ void app_main(void) {
 `@OC LCD <кол> <стр> <текст>`, `@OC NEO <gpio> <RRGGBB…>`; схема отвечает `@IN D <gpio> <0|1>`, `@IN A <gpio> <мВ>`,
 `@IN IR <код>` и т.д. (полный список — в начале `oc_hw.c`).
 
-![ESP32: схема с деталями](docs/screenshots/esp32-circuit.png)
-![ESP32: палитра компонентов](docs/screenshots/esp32-palette.png)
-![ESP32: настройки и пример кода детали](docs/screenshots/esp32-part-settings.png)
-![ESP32: номинал резистора](docs/screenshots/esp32-resistor.png)
-![ESP32: мобильный вид](docs/screenshots/esp32-mobile.png)
+### Редактор схемы
 
-### Примеры схем ESP32
+| Схема с деталями | Палитра компонентов |
+|---|---|
+| ![Схема ESP32](docs/screenshots/esp32-circuit.png) | ![Палитра ESP32](docs/screenshots/esp32-palette.png) |
+| Настройки HC-SR04 | Номинал резистора |
+| ![Настройки датчика](docs/screenshots/esp32-part-settings.png) | ![Номинал резистора](docs/screenshots/esp32-resistor.png) |
+
+### Галерея схем ESP32
 
 На снимках — подключения деталей и сгенерированные примеры исходников до запуска прошивки.
 У отдельных светодиодов на схемах стоят последовательные резисторы 220 Ом.
@@ -541,21 +449,188 @@ void app_main(void) {
 | DHT22 и LCD | Матрица NeoPixel |
 | ![ESP32 и DHT22](docs/screenshots/esp32-example-dht22.png) | ![ESP32 и NeoPixel](docs/screenshots/esp32-example-neopixel.png) |
 
-Съёмка этой галереи: `python e2e/screenshots_esp32_gallery.py http://127.0.0.1:8000`.
-
 Резистор можно добавить на схему и выбрать номинал (100 Ом — 10 кОм).
 Это обозначение, сохраняемое в `diagram.json`: расчёт тока и падения напряжения пока не поддерживается.
 На демонстрационных схемах обычные светодиоды подключены через обозначенные последовательные резисторы 220 Ом;
 их соединение со светодиодом сохраняется вместе со схемой. Модули NeoPixel имеют встроенный драйвер светодиодов.
 HC-SR04 находится в категории «Датчики»; расстояние задаётся ползунком и читается через `oc_distance_cm`.
+
+### Сетевые примеры
+
 ![Сетевые примеры ESP32](docs/screenshots/esp32-network-examples.png)
 ![Исходник сетевого проекта ESP32 и схема](docs/screenshots/esp32-wifi-source.png)
 
-Снимки сниппетов обновляются командой `python e2e/screenshots_snippets.py http://127.0.0.1:8000`.
+### ESP32 на телефоне
+
+<img src="docs/screenshots/esp32-mobile.png" alt="ESP32 на телефоне" width="340">
 
 Проверка схемы ESP32: `python e2e/test_esp32_components.py` (секунды) или с `--qemu` — с настоящей прошивкой (~3 мин).
 
-Последняя локальная проверка (02.10.2026): интерфейс схемы и сохранение проектов проходят тесты.
-При повторной съёмке демонстрационной прошивки QEMU остановился на строке `Multicore bootloader`
-и завершился по лимиту CPU. Скриншоты палитры, настроек и мобильного вида обновлены;
-новая работающая демонстрация прошивки пока не подтверждена.
+<a id="architecture"></a>
+
+## Архитектура движка
+
+| Файл | Что делает |
+|---|---|
+| `languages.py` | Реестр языков: имя файла, шаблон, команды сборки/запуска для Docker и для хоста |
+| `docker.py` | Песочница: одноразовый контейнер на запуск |
+| `local.py` | Запуск тулчейнами хоста (для разработки) |
+| `process.py` | Процесс с лимитами: время, память, вывод, число процессов |
+| `__init__.py` | Выбор бэкенда, валидация, ограничение параллельных запусков |
+| `sandbox/lang/*.Dockerfile` | Свои образы языков: `extra` (Pascal, Fortran, NASM, Prolog, COBOL, Ada, Objective-C, Lisp, OCaml, D, Zig), `jvm` (Scala, Clojure) |
+
+Библиотека алгоритмов — `compiler/library/`: код в `code/<язык>/<задача>.<расширение>`, эталонные выводы — в
+`expected.json`, один на все языки. `manage.py check_library [языки] [--algo задача]` запускает сниппеты в песочнице
+и сверяет вывод (у SQL — ячейки результата, а не рамки таблицы).
+
+**Docker-бэкенд** (`EXECUTOR_BACKEND=docker`, или `auto`, если демон запущен): `--network none`, read-only rootfs,
+`--cap-drop ALL`, `no-new-privileges`, пользователь `nobody`, лимиты памяти/CPU/pids/файлов, `timeout -s KILL`
+внутри контейнера. Время и пиковая память замеряются внутри контейнера, без учёта старта Docker.
+
+**Локальный бэкенд** (`EXECUTOR_BACKEND=local`, или `auto`, если образа нет, а тулчейн есть): на Windows процесс
+стартует приостановленным и попадает в Job Object (лимит памяти, лимит процессов, убийство всего дерева), на Linux —
+через rlimit и группу процессов. **Это не песочница**: у кода есть доступ к файлам и сети хоста. Для публичного
+доступа используй только `EXECUTOR_BACKEND=docker`.
+
+Новый язык добавляется одной записью `Language(...)` в `languages.py`.
+
+<a id="configuration"></a>
+
+## Настройки окружения
+
+| Переменная | По умолчанию | |
+|---|---|---|
+| `EXECUTOR_BACKEND` | `auto` | `auto` / `docker` / `local` |
+| `EXECUTOR_RUN_TIMEOUT` | `10` | секунды на выполнение |
+| `EXECUTOR_COMPILE_TIMEOUT` | `30` | секунды на компиляцию |
+| `EXECUTOR_MEMORY_MB` | `512` | лимит памяти (у JVM/.NET/GHC в Docker свой, выше) |
+| `EXECUTOR_MAX_CONCURRENT` | `4` | одновременных запусков на процесс |
+| `EXECUTOR_RATE_LIMIT_PER_MINUTE` | `30` | запусков с одного IP в минуту, `0` — без лимита |
+| `EXECUTOR_INTERACTIVE_TIMEOUT` | `300` | сколько живёт сессия консоли (ожидание ввода не тратит CPU-лимит) |
+| `EXECUTOR_MAX_INTERACTIVE_SESSIONS` | `8` | одновременных сессий консоли |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | `20` | попыток входа / регистрации / сброса пароля с одного IP в минуту |
+| `REDIS_URL` | пусто | кеш и сессии в Redis, например `redis://127.0.0.1:6380/0`; пусто — кеш в памяти процесса |
+| `CACHE_KEY_PREFIX` | `oc` | префикс ключей, если Redis общий с другими проектами |
+
+### Redis
+
+Redis кеширует чтения, которые дёргаются чаще всего: каталог языков (15 с — в нём статус Docker), библиотеку
+алгоритмов (ключ включает версию файлов, так что после деплоя кеш новый сам), открытие проекта по ссылке и
+публичные проекты в профиле. Сохранение, форк и удаление проекта сбрасывают его кеш сигналами (`compiler/signals.py`).
+Там же живут счётчики rate limit (общие для всех воркеров) и сессии (`cached_db`).
+
+`start.bat` сам поднимает контейнер `oc-redis` на порту **6380** (6379 часто занят чужим Redis/Memurai).
+Если Redis упал, сайт работает дальше: кеш пропускается, лимиты не применяются, в лог раз в минуту пишется WARNING.
+
+<a id="api-reference"></a>
+
+## API
+
+| Метод | URL | |
+|---|---|---|
+| GET | `/api/languages/` | языки и их доступность |
+| POST | `/api/run/` | `{language, code, files, stdin, args}` → `{status, stdout, stderr, compile_output, time_ms, memory_kb, exit_code, ...}` |
+| POST | `/api/snippets/` | сохранить проект, вернуть короткую ссылку (залогиненному — в «Мои проекты») |
+| GET | `/api/snippets/<id>/`, `/s/<id>/raw/` | получить проект |
+| PATCH, DELETE | `/api/snippets/<id>/` | сохранить на месте / переименовать (`{title}`) / удалить — только владелец |
+| POST | `/api/snippets/<id>/fork/` | форк в свои проекты |
+| GET | `/api/projects/?q=` | «Мои проекты» |
+| POST | `/api/auth/register/`, `/api/auth/login/`, `/api/auth/logout/`; GET `/api/auth/me/` | аккаунт (`{username, password}`) |
+| GET | `/api/history/`, `/api/executions/<id>/` | история текущей сессии |
+| POST | `/api/format/` | `{language, code}` → `{code}` — только Rust и Elixir, остальные форматируются в браузере |
+| POST | `/api/zip/` | `{language, code, files}` → архив проекта; для сниппета — GET `/s/<id>/zip/` |
+
+WebSocket `/ws/run/` — консоль: `{"type": "start", language, code, files}`, затем `stdin` / `eof` / `interrupt` / `kill`;
+сервер шлёт `phase`, `output` (`compile` / `stdout` / `stderr`) и `exit`.
+
+Статусы: `ok`, `stopped`, `compile_error`, `runtime_error`, `timeout`, `memory_limit`, `output_limit`, `unavailable`, `internal_error`.
+
+<a id="testing"></a>
+
+## Тесты и GitHub Actions
+
+```powershell
+.\.venv\Scripts\python manage.py test compiler      # движок, API, консоль, отладчик (без Docker часть пропустится)
+python e2e\test_ui.py                                # браузер: запуск, консоль, мультифайл, история (нужен сервер)
+python e2e\test_debugger.py                          # браузер: отладка Python / C / Java
+python e2e\test_tools.py                             # браузер: аргументы, Beautify, zip, настройки, Vim / Emacs
+python e2e\test_accounts.py                          # браузер: регистрация, сохранение, форк, «Мои проекты»
+python e2e\test_library.py                           # браузер: «Примеры», подсветка и запуск новых языков
+python e2e\test_blocks.py                            # Blockly → Python
+python e2e\test_scratch.py                           # Scratch: сцена, .sb3, сохранение и форки
+python e2e\test_circuit.py                           # Arduino: все примеры, детали ↔ прошивка, палитра, сохранение схемы
+python e2e\test_esp32.py                             # прошивка ESP32, IP и веб-сайт
+python e2e\test_esp32_components.py --qemu          # схема ESP32: GPIO/LEDC/АЦП через мост oc_hw.c
+.\.venv\Scripts\python manage.py check_library      # все 615 сниппетов против эталона (~30 мин)
+```
+
+В `manage.py test` библиотека проверяется на шести языках разных типов (интерпретатор, компилятор, JVM, .NET,
+свой образ, SQL), а шаблон каждого из 41 языка запускается целиком; полный прогон сниппетов — `OC_LIBRARY_FULL=1`.
+
+Тесты кеша на настоящем Redis включаются переменной `REDIS_TEST_URL` (отдельная база: тесты делают `FLUSHDB`,
+поэтому `REDIS_URL` они не трогают никогда).
+
+### GitHub Actions
+
+- **CI** (`.github/workflows/ci.yml`, каждый пуш и PR): flake8, `node --check` для JS, `makemigrations --check`;
+  `manage.py test` на PostgreSQL 18 + Redis 7 с Docker-песочницей; браузерные e2e (UI, аккаунты, профили, блоки,
+  аудит адаптивки) на Playwright. Скриншоты e2e — в артефактах запуска.
+- **Nightly** (`.github/workflows/nightly.yml`, каждую ночь и вручную через *Run workflow*): `check_library` всех
+  615 сниппетов матрицей по группам языков, полный `manage.py test` с образами отладчиков, e2e отладчика,
+  инструментов, библиотеки, Scratch 3, Arduino и ESP32. Им нужны десятки гигабайт образов, поэтому не на каждый пуш.
+
+<a id="screenshots"></a>
+
+## Обновление скриншотов
+
+Изображения находятся в `docs/screenshots/` и показаны в разделах соответствующих режимов.
+Это снимки настоящего интерфейса. Галерея ESP32 показывает схемы и исходники до запуска;
+ограничение текущей проверки QEMU описано в разделе ESP32.
+
+Установи инструменты съёмки и запусти локальный сайт:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m playwright install chromium
+```
+
+| Что обновить | Команда после запуска сайта |
+|---|---|
+| Редактор, отладчик, аккаунты | `python e2e/screenshots.py http://127.0.0.1:8000` |
+| Алгоритмы на разных языках | `python e2e/screenshots_snippets.py http://127.0.0.1:8000` |
+| Scratch, Blockly, Arduino | `python e2e/screenshots_hardware.py http://127.0.0.1:8000` |
+| Палитра, настройки и телефон ESP32 | `python e2e/screenshots_esp32_parts.py http://127.0.0.1:8000` |
+| Шесть примеров схем ESP32 | `python e2e/screenshots_esp32_gallery.py http://127.0.0.1:8000` |
+| Запущенная прошивка ESP32 и её сайт | `python e2e/test_esp32.py http://127.0.0.1:8000` |
+
+Для съёмки работающих программ нужны PostgreSQL, Docker и образы соответствующих языков.
+Для Scratch предварительно выполни `manage.py build_scratch`.
+
+<a id="troubleshooting"></a>
+
+## Решение проблем
+
+| Что видно | Что проверить |
+|---|---|
+| Scratch предлагает команду сборки | выполни `manage.py build_scratch`, затем обнови страницу |
+| Arduino сообщает, что сборщик недоступен | запусти Docker Desktop и `manage.py build_sandbox arduino` |
+| Язык в меню недоступен | посмотри `manage.py engine_status`; скачай официальный образ или собери свой через `build_sandbox` |
+| ESP32 долго пишет строки компиляции | дождись сборки ESP-IDF; не останавливай сессию до сообщения о запуске |
+| Сайт ESP32 ещё не готов | дождись `ESP32 HTTP ready` и обнови страницу сайта |
+| Ссылка ESP32 сообщает о завершённой сессии | снова запусти прошивку и открой новую ссылку из редактора |
+| Письмо восстановления не пришло | без SMTP оно выводится в консоль; для реальной отправки настрой `EMAIL_HOST` и учётные данные |
+| Браузер не соединяется с консолью | используй ASGI-сервер и разреши WebSocket в прокси |
+
+В публичной установке предварительно собери редактор и образы: посетителю нужны готовые режимы,
+а не доступ к командам администратора сервера.
+
+<a id="deployment"></a>
+
+## Развёртывание
+
+`DJANGO_DEBUG=false`, свой `DJANGO_SECRET_KEY` и `DJANGO_ALLOWED_HOSTS`, `manage.py collectstatic`,
+ASGI-сервер (`daphne config.asgi:application` — нужен для WebSocket-консоли), `EXECUTOR_BACKEND=docker`, `REDIS_URL`
+(без Redis rate limit и кеш у каждого воркера свои).
+
+К базе — через пул psycopg (`DB_POOL_SIZE`, по умолчанию 10) с `CONN_MAX_AGE = 0`: под ASGI «постоянные» соединения
+утекают по одному на поток, пока PostgreSQL не упрётся в `max_connections`. Не включай `CONN_MAX_AGE` обратно.
