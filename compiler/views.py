@@ -115,12 +115,8 @@ def library_index(request):
     """Библиотека алгоритмов для языка: категории и задачи, для которых есть код."""
     slug = request.GET.get("language", "")
     if slug == "esp32":
-        return JsonResponse({"categories": ["Микроконтроллеры"], "items": [
-            {"id": "web_server", "title": "Сайт ESP32 в эмуляторе", "category": "Микроконтроллеры",
-             "description": "HTTP-сервер и Serial. Сеть QEMU: виртуальный Ethernet OpenETH."},
-            {"id": "wifi_hardware", "title": "Wi-Fi и сайт на настоящей ESP32", "category": "Микроконтроллеры",
-             "description": "Подключение к роутеру и HTTP-сервер. Нужна физическая плата: QEMU не эмулирует Wi-Fi."},
-        ]})
+        from .library import esp32
+        return JsonResponse({"categories": list(esp32.CATEGORIES), "items": esp32.catalog()})
     if engine.get_language(slug) is None:
         return JsonResponse({"error": "Неизвестный язык"}, status=400)
     items = oc_cache.cached(f"library:{library.version()}:index:{slug}", oc_cache.LIBRARY_TTL,
@@ -130,13 +126,12 @@ def library_index(request):
 
 @require_GET
 def library_item(request, slug: str, algorithm_id: str):
-    if slug == "esp32" and algorithm_id in ("web_server", "wifi_hardware"):
-        from pathlib import Path
-        code = engine.get_language("esp32").template if algorithm_id == "web_server" else (
-            Path(__file__).parent / "engine/sandbox/esp32/main/wifi_hardware.c.example"
-        ).read_text(encoding="utf-8")
-        return JsonResponse({"id": algorithm_id, "title": "ESP32 " + algorithm_id,
-                             "category": "Микроконтроллеры", "description": "", "language": slug, "code": code})
+    if slug == "esp32":
+        from .library import esp32
+        item = esp32.get_project(algorithm_id)
+        if item is None:
+            raise Http404
+        return JsonResponse(item)
     code = oc_cache.cached(f"library:{library.version()}:code:{slug}:{algorithm_id}", oc_cache.LIBRARY_TTL,
                            lambda: library.get_code(slug, algorithm_id))
     if code is None:

@@ -129,6 +129,8 @@ jobs:
         run: python e2e/test_blocks.py
       - name: ESP32 circuit (без QEMU)
         run: python e2e/test_esp32_components.py
+      - name: ESP32 examples (код и схемы)
+        run: python e2e/test_esp32_library.py
       - name: Responsive audit
         run: python e2e/responsive_audit.py
       - name: Server log

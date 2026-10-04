@@ -2303,7 +2303,7 @@
           + "Свой код сохрани (Ctrl+S), если он нужен.")) return;
       $("libraryDialog").close();
       leaveProject();
-      setProject({ code: example.code, files: [] });
+      setProject({ code: example.code, files: example.files || [] });
       scheduleDraftSave();
       toast(`${example.title} — жми Ctrl+Enter`);
     } catch (err) {
